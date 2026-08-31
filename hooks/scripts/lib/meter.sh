@@ -31,9 +31,10 @@ kairos_refresh() {
   kairos_have_jq || return 0
   [ -d "$KAIROS_PROJECTS_DIR" ] || return 0
   kairos_rdir=$(kairos_partition "$kairos_ruuid") || return 0
+  kairos_try_lock "$kairos_rdir" || return 0
   kairos_rcur="$kairos_rdir/cursors.tsv"
   kairos_rled="$kairos_rdir/ledger.tsv"
-  kairos_rnew="$kairos_rdir/cursors.new"
+  kairos_rnew="$kairos_rdir/cursors.new.$$"
   : > "$kairos_rnew"
 
   find "$KAIROS_PROJECTS_DIR" -name '*.jsonl' -mmin -1440 2>/dev/null | while IFS= read -r kairos_f; do
@@ -59,22 +60,28 @@ kairos_refresh() {
   # Carry forward cursors for files the scan did not revisit, so a transcript
   # that goes quiet for a day is not re-read when it wakes up.
   if [ -f "$kairos_rcur" ]; then
-    awk -F'\t' 'NR == FNR { seen[$1] = 1; next } !($1 in seen)' "$kairos_rnew" "$kairos_rcur" >> "$kairos_rnew"
+    awk -F'\t' 'NR == FNR { seen[$1] = 1; next } !($1 in seen)' \
+      "$kairos_rnew" "$kairos_rcur" > "$kairos_rnew.carry"
+    cat "$kairos_rnew.carry" >> "$kairos_rnew"
+    rm -f "$kairos_rnew.carry"
   fi
   mv "$kairos_rnew" "$kairos_rcur"
+  kairos_unlock "$kairos_rdir"
   return 0
 }
 
 kairos_prune() {
   kairos_puuid=${1:-unknown}
   kairos_pdir=$(kairos_partition "$kairos_puuid") || return 0
+  kairos_try_lock "$kairos_pdir" || return 0
   kairos_pled="$kairos_pdir/ledger.tsv"
-  [ -f "$kairos_pled" ] || return 0
+  [ -f "$kairos_pled" ] || { kairos_unlock "$kairos_pdir"; return 0; }
   kairos_pcut=$(( $(kairos_now) - KAIROS_LEDGER_WINDOW ))
-  if awk -F'\t' -v c="$kairos_pcut" '$1 >= c' "$kairos_pled" > "$kairos_pled.tmp"; then
-    mv "$kairos_pled.tmp" "$kairos_pled"
+  if awk -F'\t' -v c="$kairos_pcut" '$1 >= c' "$kairos_pled" > "$kairos_pled.tmp.$$"; then
+    mv "$kairos_pled.tmp.$$" "$kairos_pled"
   else
-    rm -f "$kairos_pled.tmp"
+    rm -f "$kairos_pled.tmp.$$"
   fi
+  kairos_unlock "$kairos_pdir"
   return 0
 }

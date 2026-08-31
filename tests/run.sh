@@ -217,9 +217,84 @@ kairos_refresh "$acct"
 is "a shrunken file is re-read from the start" "7" "$(wc -l < "$part/ledger.tsv" | tr -d ' ')"
 
 # Pruning keeps the window bounded no matter how long kairos has been installed.
-printf '1\t%s\ts0\tm\t999\n' "$acct" >> "$part/ledger.tsv"
+# Use kairos_now to make the test time-independent.
+kairos_old_epoch=$(($(kairos_now) - KAIROS_LEDGER_WINDOW - 1000))
+kairos_recent_epoch=$(($(kairos_now) - 1000))
+{
+  printf '%s\t%s\ts0\tm\t100\n' "$kairos_recent_epoch" "$acct"
+  printf '%s\t%s\ts0\tm\t200\n' "$kairos_recent_epoch" "$acct"
+  printf '%s\t%s\ts0\tm\t999\n' "$kairos_old_epoch" "$acct"
+} >> "$part/ledger.tsv"
 kairos_prune "$acct"
-is "pruning drops rows outside the window" "7" "$(wc -l < "$part/ledger.tsv" | tr -d ' ')"
+is "pruning drops rows outside the window" "9" "$(wc -l < "$part/ledger.tsv" | tr -d ' ')"
+
+# Test locking: lock can be taken, second attempt fails, re-acquired after unlock
+if kairos_try_lock "$part"; then pass "lock can be taken"; else fail "lock can be taken" "success" "failure"; fi
+if kairos_try_lock "$part"; then fail "second lock attempt fails" "failure" "success"; else pass "second lock attempt fails"; fi
+kairos_unlock "$part"
+if kairos_try_lock "$part"; then pass "lock can be taken again after unlock"; else fail "lock can be taken again after unlock" "success" "failure"; fi
+kairos_unlock "$part"
+
+# Test stale lock: create a lock, age it, then break and re-acquire it
+mkdir "$part/lock"
+touch -t "$(date -u -d '3 minutes ago' +%Y%m%d%H%M.%S 2>/dev/null || date -u -v-3M +%Y%m%d%H%M.%S)" "$part/lock" 2>/dev/null || true
+if kairos_try_lock "$part"; then pass "stale lock is broken and re-acquired"; else fail "stale lock is broken and re-acquired" "success" "failure"; fi
+kairos_unlock "$part"
+
+# Test kairos_refresh with held lock
+mkdir "$part/lock"
+kairos_refresh "$acct"
+is "kairos_refresh returns 0 with held lock" "9" "$(wc -l < "$part/ledger.tsv" | tr -d ' ')"
+kairos_unlock "$part"
+
+# Test kairos_prune with held lock
+mkdir "$part/lock"
+kairos_ledger_before=$(wc -l < "$part/ledger.tsv" | tr -d ' ')
+kairos_prune "$acct"
+kairos_ledger_after=$(wc -l < "$part/ledger.tsv" | tr -d ' ')
+is "kairos_prune with held lock leaves ledger unchanged" "$kairos_ledger_before" "$kairos_ledger_after"
+kairos_unlock "$part"
+
+# Concurrency regression: multiple processes calling kairos_refresh should not overcount
+kairos_worker="$KAIROS_TESTDIR/refresh_worker.sh"
+cat > "$kairos_worker" << 'WORKER_SCRIPT'
+#!/bin/bash
+ROOT="$1"
+KAIROS_HOME="$2"
+KAIROS_PROJECTS_DIR="$3"
+KAIROS_CLAUDE_JSON="$4"
+ACCT="$5"
+
+LIB="$ROOT/hooks/scripts/lib"
+. "$LIB/common.sh"
+. "$LIB/account.sh"
+. "$LIB/meter.sh"
+
+kairos_refresh "$ACCT" 2>/dev/null
+WORKER_SCRIPT
+chmod +x "$kairos_worker"
+
+# Clear ledger for a clean concurrency test
+rm -f "$part/ledger.tsv" "$part/cursors.tsv" "$part/cursors.new."*
+
+# Launch multiple refresh processes
+for kairos_i in 1 2 3 4 5; do
+  bash "$kairos_worker" "$ROOT" "$KAIROS_HOME" "$KAIROS_PROJECTS_DIR" "$KAIROS_CLAUDE_JSON" "$acct" 2>"$KAIROS_TESTDIR/worker_$kairos_i.err" &
+done
+wait
+
+# Verify no errors
+kairos_worker_errors=""
+for kairos_err in "$KAIROS_TESTDIR"/worker_*.err; do
+  if [ -s "$kairos_err" ]; then
+    kairos_worker_errors="$kairos_worker_errors $(cat "$kairos_err")"
+  fi
+done
+is "concurrent refresh produces no stderr" "" "$kairos_worker_errors"
+
+# Should have exactly 3 rows (one per assistant message), not 15 (3x5 processes)
+is "concurrent refresh does not overcount" "3" "$(wc -l < "$part/ledger.tsv" | tr -d ' ')"
+
 teardown_env
 
 printf '\n%s passed, %s failed\n' "$PASS" "$FAIL"

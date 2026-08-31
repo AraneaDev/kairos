@@ -44,3 +44,35 @@ kairos_config_load() {
   fi
   return 0
 }
+
+# How long a lock may be held before another process may break it.
+: "${KAIROS_LOCK_STALE_MIN:=2}"
+
+# True when a lock directory is older than the stale window. Uses find -mmin
+# rather than stat, whose flags differ between GNU, BSD and Git Bash.
+kairos_lock_is_stale() {
+  [ -n "$(find "$1" -prune -mmin "+$KAIROS_LOCK_STALE_MIN" 2>/dev/null)" ]
+}
+
+# mkdir is atomic on every platform this runs on, which flock is not: macOS
+# ships without it. A caller that cannot take the lock skips its work and
+# returns 0, because a skipped refresh costs nothing (the next prompt refreshes
+# anyway) while a blocked prompt costs the user their turn.
+kairos_try_lock() {
+  kairos_lkdir="$1/lock"
+  if mkdir "$kairos_lkdir" 2>/dev/null; then
+    return 0
+  fi
+  if kairos_lock_is_stale "$kairos_lkdir"; then
+    rm -rf "$kairos_lkdir" 2>/dev/null
+    if mkdir "$kairos_lkdir" 2>/dev/null; then
+      return 0
+    fi
+  fi
+  return 1
+}
+
+kairos_unlock() {
+  rm -rf "${1}/lock" 2>/dev/null
+  return 0
+}
