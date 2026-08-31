@@ -20,6 +20,7 @@ if kairos_have_jq && [ -n "$payload" ]; then
   session=$(printf '%s' "$payload" | jq -r '.session_id // empty' 2>/dev/null)
 fi
 [ -n "$session" ] || session="unknown"
+session=$(kairos_safe_id "$session")
 
 uuid=$(kairos_active_account) || true
 kairos_account_record "$uuid"
@@ -30,8 +31,11 @@ printf '%s\n' "$uuid" > "$KAIROS_HOME/sessions/$session"
 # A Stop hook killed between claiming a turn marker and deleting it leaves the
 # claimed file behind. It is inert, nothing ever reads it, but it should not
 # accumulate forever on a long lived machine, and the start of a session is the
-# natural moment to clear what an earlier one abandoned. The age bound keeps
-# this away from a claim a concurrent Stop hook is using right now.
+# natural moment to clear what an earlier one abandoned.
+#
+# stop.sh touches each claim as it makes it, so this age is measured from the
+# claim itself. Without that touch the claim would inherit the turn's start
+# time and a long turn's live claim could be swept while it was still in use.
 find "$(kairos_partition "$uuid")" -name 'turn.start.claimed.*' -mmin +60 \
   -exec rm -f {} + 2>/dev/null
 

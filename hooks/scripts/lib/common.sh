@@ -82,3 +82,18 @@ kairos_unlock() {
   rm -rf "${1}/lock" 2>/dev/null
   return 0
 }
+
+# A session id becomes a filename, so a value containing a slash writes outside
+# the sessions directory: ../config reaches the state directory, and ../.. leaves
+# KAIROS_HOME entirely. Ids are uuids in practice.
+#
+# An unsafe id is refused rather than rewritten. A rewritten id would still
+# bind, quietly, to the wrong session, and binding the wrong session to the
+# wrong account is the exact failure this whole partition scheme exists to
+# prevent.
+kairos_safe_id() {
+  case "${1:-}" in
+    ''|.|..|*[!A-Za-z0-9._-]*) printf 'unknown\n' ;;
+    *) printf '%s\n' "$1" ;;
+  esac
+}

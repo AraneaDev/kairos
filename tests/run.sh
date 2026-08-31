@@ -86,6 +86,9 @@ is "kairos_size_of counts bytes" "5" "$(kairos_size_of "$KAIROS_TESTDIR/five")"
 kairos_ensure_dir "$KAIROS_TESTDIR/a/b/c"
 is "kairos_ensure_dir creates nested dirs" "yes" "$([ -d "$KAIROS_TESTDIR/a/b/c" ] && echo yes || echo no)"
 asserts "kairos_ensure_dir is idempotent" kairos_ensure_dir "$KAIROS_TESTDIR/a/b/c"
+
+is "a uuid is a safe id" "3f2a-11ee-b0c4" "$(kairos_safe_id 3f2a-11ee-b0c4)"
+is "a traversal is refused" "unknown" "$(kairos_safe_id ../config)"
 teardown_env
 
 echo
@@ -661,6 +664,35 @@ rm -f "$sweeppart/turn.start.claimed.888"
 is "session start exits zero with an unreadable claude.json" "0" \
   "$(rm -f "$KAIROS_CLAUDE_JSON"; echo '{"session_id":"sY"}' | bash "$ROOT/hooks/scripts/session-start.sh" >/dev/null 2>&1; echo $?)"
 is "and falls back to the unknown partition" "unknown" "$(cat "$KAIROS_HOME/sessions/sY" 2>/dev/null)"
+
+# A session id is a filename, so a traversal must not escape the directory.
+travpart="$KAIROS_HOME/sessions"
+: > "$KAIROS_HOME/canary"
+echo '{"session_id":"../canary"}' | bash "$ROOT/hooks/scripts/session-start.sh" >/dev/null 2>&1
+is "a traversing session id cannot clobber a state file" "" "$(cat "$KAIROS_HOME/canary")"
+is "and is bound under a safe name instead" "yes" "$([ -f "$travpart/unknown" ] && echo yes || echo no)"
+rm -f "$KAIROS_HOME/canary"
+
+teardown_env
+
+echo
+echo "hooks/session-start.sh: long-turn claim test"
+setup_env
+# shellcheck source=/dev/null
+. "$LIB/common.sh"
+# shellcheck source=/dev/null
+. "$LIB/account.sh"
+
+acct="aaaaaaaa-1111-2222-3333-444444444444"
+# A claim is aged from when it was claimed, not from when the turn began.
+agepart=$(kairos_partition "$acct")
+: > "$agepart/turns.tsv"
+printf '%s\ts9\n' "$(kairos_now)" > "$agepart/turn.start"
+touch -t 202601010000 "$agepart/turn.start"
+printf '%s\t%s\ts9\tm\t500\n' "$(kairos_now)" "$acct" > "$agepart/ledger.tsv"
+echo '{"session_id":"s9"}' | bash "$ROOT/hooks/scripts/stop.sh" >/dev/null 2>&1
+is "a long turn still records rather than being swept" "1" \
+  "$(wc -l < "$agepart/turns.tsv" | tr -d ' ')"
 teardown_env
 
 printf '\n%s passed, %s failed\n' "$PASS" "$FAIL"

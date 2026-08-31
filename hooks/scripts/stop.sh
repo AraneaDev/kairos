@@ -34,6 +34,10 @@ marker="$part/turn.start"
 # prediction.
 claimed="$marker.claimed.$$"
 mv "$marker" "$claimed" 2>/dev/null || exit 0
+# mv preserves mtime, so without this the claim inherits the turn's start time
+# and a long turn's claim looks stale the moment it is created. The sweep in
+# session-start.sh ages claims from this touch, not from the turn.
+touch "$claimed" 2>/dev/null
 
 started=$(awk -F'\t' 'NR == 1 { print $1 }' "$claimed")
 marked_session=$(awk -F'\t' 'NR == 1 { print $2 }' "$claimed")
