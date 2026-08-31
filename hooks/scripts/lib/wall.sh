@@ -19,11 +19,16 @@ kairos_harvest_walls() {
   kairos_have_jq || return 0
   [ -d "$KAIROS_PROJECTS_DIR" ] || return 0
   kairos_wdir=$(kairos_partition "$kairos_wuuid") || return 0
+  kairos_try_lock "$kairos_wdir" || return 0
   kairos_wled="$kairos_wdir/ledger.tsv"
   kairos_wfile="$kairos_wdir/walls.tsv"
   kairos_wunattr="$kairos_wdir/walls.unattributed.tsv"
   kairos_wseen=$(kairos_meta_get "$kairos_wdir" first_seen)
-  [ -n "$kairos_wseen" ] || kairos_wseen=0
+  # An account whose first_seen was never written has no point from which its
+  # walls can be trusted, so nothing is attributable yet. Defaulting to 0 would
+  # do the opposite and calibrate off refusals that may belong to another
+  # subscription entirely.
+  [ -n "$kairos_wseen" ] || kairos_wseen=$(kairos_now)
 
   if [ "$#" -gt 0 ]; then
     set -- "$@"
@@ -31,7 +36,7 @@ kairos_harvest_walls() {
     set -- -mmin -1440
   fi
 
-  kairos_wraw="$kairos_wdir/.walls.raw"
+  kairos_wraw="$kairos_wdir/.walls.raw.$$"
   find "$KAIROS_PROJECTS_DIR" -name '*.jsonl' "$@" -exec cat {} + 2>/dev/null \
     | jq -R -r "$KAIROS_WALL_JQ" 2>/dev/null \
     | sort -u -k2,2n > "$kairos_wraw"
@@ -60,6 +65,7 @@ kairos_harvest_walls() {
     fi
   done < "$kairos_wraw"
   rm -f "$kairos_wraw"
+  kairos_unlock "$kairos_wdir"
   return 0
 }
 
@@ -89,10 +95,18 @@ kairos_band() {
     return 0
   fi
   awk -F'\t' '
-    NR == 1 { lo = $2; hi = $2 }
-    { if ($2 < lo) lo = $2; if ($2 > hi) hi = $2 }
+    # Only a positive integer consumption is a usable wall. awk coerces a blank
+    # or malformed row to 0, which would drag the low edge to zero while still
+    # counting toward confidence: a band the gate acts on, derived from a row
+    # that says nothing.
+    $2 ~ /^[0-9]+$/ && $2 + 0 > 0 {
+      if (n == 0 || $2 < lo) lo = $2
+      if (n == 0 || $2 > hi) hi = $2
+      n++
+    }
     END {
-      margin = (NR >= 3) ? 0.05 : 0.15
-      printf "%d\t%d\t%d\n", lo * (1 - margin), hi * (1 + margin), NR
+      if (n == 0) { print "0\t0\t0"; exit }
+      margin = (n >= 3) ? 0.05 : 0.15
+      printf "%d\t%d\t%d\n", lo * (1 - margin), hi * (1 + margin), n
     }' "$kairos_nfile"
 }

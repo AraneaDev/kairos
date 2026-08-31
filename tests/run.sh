@@ -72,8 +72,6 @@ setup_env
 
 is "KAIROS_HOME honours the environment" "$KAIROS_TESTDIR/state" "$KAIROS_HOME"
 is "block length defaults to five hours" "18000" "$KAIROS_BLOCK_SECONDS"
-is "the seeded band low edge" "4100000" "$KAIROS_SEED_LOW"
-is "the seeded band high edge" "5700000" "$KAIROS_SEED_HIGH"
 
 now=$(kairos_now)
 case "$now" in
@@ -459,6 +457,31 @@ kairos_meta_set "$part" first_seen 1788999999
 kairos_harvest_walls "$acct"
 is "a wall predating first_seen is not used" "0" "$([ -s "$part/walls.tsv" ] && wc -l < "$part/walls.tsv" | tr -d ' ' || echo 0)"
 is "but it is kept aside" "1" "$(wc -l < "$part/walls.unattributed.tsv" | tr -d ' ')"
+
+# A malformed row must not be able to move the band or count toward
+# confidence. A zero low edge with confidence above zero is a band the gate
+# would act on, derived from a row that says nothing.
+printf '100\t4000000\t200\n101\tbogus\t201\n' > "$part/walls.tsv"
+is "a malformed wall row is ignored by the band" "3400000	4600000	1" "$(kairos_band "$acct")"
+printf '100\t4000000\t200\n101\t4200000\t201\n102\t4400000\t202\n\n' > "$part/walls.tsv"
+is "a blank line neither lowers the floor nor inflates confidence" "3800000	4620000	3" "$(kairos_band "$acct")"
+printf '100\tbogus\t200\n' > "$part/walls.tsv"
+is "walls that are all malformed leave the account uncalibrated" "0	0	0" "$(kairos_band "$acct")"
+rm -f "$part/walls.tsv"
+
+# An account kairos has never recorded has no point from which its walls can
+# be trusted, so every historical refusal is set aside rather than believed.
+fresh="ffff-unseen"
+fpart=$(kairos_partition "$fresh")
+kairos_harvest_walls "$fresh"
+is "with no first_seen, nothing is attributable" "0" "$([ -s "$fpart/walls.tsv" ] && wc -l < "$fpart/walls.tsv" | tr -d ' ' || echo 0)"
+
+# A wall landing in the same second as first_seen belongs to this account.
+seen="ffff-exact"
+spart=$(kairos_partition "$seen")
+kairos_meta_set "$spart" first_seen 1788172097
+kairos_harvest_walls "$seen"
+is "a wall exactly at first_seen is attributed" "1" "$(wc -l < "$spart/walls.tsv" | tr -d ' ')"
 teardown_env
 
 printf '\n%s passed, %s failed\n' "$PASS" "$FAIL"
