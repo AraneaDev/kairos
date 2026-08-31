@@ -119,15 +119,55 @@ kairos_account_record "aaaaaaaa-1111-2222-3333-444444444444"
 is "first_seen is written once and never moves" "$first" "$(kairos_meta_get "$part" first_seen)"
 
 # Test concurrent writes to meta do not corrupt or lose keys.
-for kairos_race_i in 1 2 3 4 5; do
-  kairos_race_part="$KAIROS_TESTDIR/race-$kairos_race_i"
-  kairos_ensure_dir "$kairos_race_part"
-  kairos_meta_set "$kairos_race_part" seed "seedvalue"
-  kairos_meta_set "$kairos_race_part" key1 "value1" &
-  kairos_meta_set "$kairos_race_part" key2 "value2" &
+# This uses genuinely separate bash processes so $$ varies per writer.
+kairos_race_part="$KAIROS_TESTDIR/concurrent_meta"
+kairos_ensure_dir "$kairos_race_part"
+kairos_meta_set "$kairos_race_part" seed "seedvalue"
+
+# Create a worker script that will be run as a separate process
+kairos_worker="$KAIROS_TESTDIR/meta_worker.sh"
+cat > "$kairos_worker" << 'WORKER_SCRIPT'
+#!/bin/bash
+LIB="$1"
+DIR="$2"
+KEY="$3"
+VAL="$4"
+
+. "$LIB/common.sh"
+. "$LIB/account.sh"
+
+kairos_meta_set "$DIR" "$KEY" "$VAL"
+WORKER_SCRIPT
+chmod +x "$kairos_worker"
+
+# Launch multiple separate bash processes writing different keys
+# Run this multiple times to increase likelihood of hitting race conditions
+for kairos_race_round in 1 2 3; do
+  # Launch concurrent writers as separate bash processes
+  bash "$kairos_worker" "$LIB" "$kairos_race_part" "writer1_round$kairos_race_round" "val1" 2> "$KAIROS_TESTDIR/worker1_$kairos_race_round.err" &
+  bash "$kairos_worker" "$LIB" "$kairos_race_part" "writer2_round$kairos_race_round" "val2" 2> "$KAIROS_TESTDIR/worker2_$kairos_race_round.err" &
+  bash "$kairos_worker" "$LIB" "$kairos_race_part" "writer3_round$kairos_race_round" "val3" 2> "$KAIROS_TESTDIR/worker3_$kairos_race_round.err" &
   wait
-  is "concurrent writes preserve seed key (iteration $kairos_race_i)" "seedvalue" "$(kairos_meta_get "$kairos_race_part" seed)"
 done
+
+# Verify no errors in worker output (old code would have "mv: cannot stat" errors)
+kairos_race_errors=""
+for kairos_race_err in "$KAIROS_TESTDIR"/worker*.err; do
+  if [ -s "$kairos_race_err" ]; then
+    kairos_race_errors="$kairos_race_errors\n$(cat "$kairos_race_err")"
+  fi
+done
+is "concurrent writers produce no errors" "" "$kairos_race_errors"
+
+# Verify meta file still exists
+is "meta file still exists after concurrent writes" "yes" "$([ -f "$kairos_race_part/meta" ] && echo yes || echo no)"
+
+# Verify pre-seeded key is still there
+is "concurrent writes preserve pre-seeded keys" "seedvalue" "$(kairos_meta_get "$kairos_race_part" seed)"
+
+# Verify all lines in meta are well-formed key<TAB>value pairs with no truncation
+kairos_race_malformed=$(awk '!/^[^\t]+\t.+$/' "$kairos_race_part/meta" | wc -l | tr -d ' ')
+is "all meta entries are well-formed key<TAB>value pairs" "0" "$kairos_race_malformed"
 
 # The fallback path: no readable claude.json at all.
 rm -f "$KAIROS_CLAUDE_JSON"

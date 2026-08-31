@@ -39,7 +39,7 @@ kairos_meta_set() {
   if [ -f "$kairos_mdir/meta" ]; then
     awk -F'\t' -v k="$kairos_mkey" '$1 != k' "$kairos_mdir/meta" > "$kairos_mtmp" || { rm -f "$kairos_mtmp"; return 1; }
   else
-    : > "$kairos_mtmp"
+    : > "$kairos_mtmp" || { rm -f "$kairos_mtmp"; return 1; }
   fi
   printf '%s\t%s\n' "$kairos_mkey" "$kairos_mval" >> "$kairos_mtmp" || { rm -f "$kairos_mtmp"; return 1; }
   mv "$kairos_mtmp" "$kairos_mdir/meta" || { rm -f "$kairos_mtmp"; return 1; }
