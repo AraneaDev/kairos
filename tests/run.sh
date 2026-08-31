@@ -118,6 +118,17 @@ first=$(kairos_meta_get "$part" first_seen)
 kairos_account_record "aaaaaaaa-1111-2222-3333-444444444444"
 is "first_seen is written once and never moves" "$first" "$(kairos_meta_get "$part" first_seen)"
 
+# Test concurrent writes to meta do not corrupt or lose keys.
+for kairos_race_i in 1 2 3 4 5; do
+  kairos_race_part="$KAIROS_TESTDIR/race-$kairos_race_i"
+  kairos_ensure_dir "$kairos_race_part"
+  kairos_meta_set "$kairos_race_part" seed "seedvalue"
+  kairos_meta_set "$kairos_race_part" key1 "value1" &
+  kairos_meta_set "$kairos_race_part" key2 "value2" &
+  wait
+  is "concurrent writes preserve seed key (iteration $kairos_race_i)" "seedvalue" "$(kairos_meta_get "$kairos_race_part" seed)"
+done
+
 # The fallback path: no readable claude.json at all.
 rm -f "$KAIROS_CLAUDE_JSON"
 is "falls back to a named unknown account" "unknown" "$(kairos_active_account || true)"

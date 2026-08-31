@@ -35,13 +35,14 @@ kairos_meta_get() {
 kairos_meta_set() {
   kairos_mdir=$1; kairos_mkey=$2; kairos_mval=$3
   kairos_ensure_dir "$kairos_mdir" || return 1
+  kairos_mtmp="$kairos_mdir/meta.tmp.$$"
   if [ -f "$kairos_mdir/meta" ]; then
-    awk -F'\t' -v k="$kairos_mkey" '$1 != k' "$kairos_mdir/meta" > "$kairos_mdir/meta.tmp"
+    awk -F'\t' -v k="$kairos_mkey" '$1 != k' "$kairos_mdir/meta" > "$kairos_mtmp" || { rm -f "$kairos_mtmp"; return 1; }
   else
-    : > "$kairos_mdir/meta.tmp"
+    : > "$kairos_mtmp"
   fi
-  printf '%s\t%s\n' "$kairos_mkey" "$kairos_mval" >> "$kairos_mdir/meta.tmp"
-  mv "$kairos_mdir/meta.tmp" "$kairos_mdir/meta"
+  printf '%s\t%s\n' "$kairos_mkey" "$kairos_mval" >> "$kairos_mtmp" || { rm -f "$kairos_mtmp"; return 1; }
+  mv "$kairos_mtmp" "$kairos_mdir/meta" || { rm -f "$kairos_mtmp"; return 1; }
 }
 
 # Records what this account is. The email address is deliberately not among the
