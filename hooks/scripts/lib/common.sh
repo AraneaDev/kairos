@@ -11,6 +11,7 @@
 : "${KAIROS_RESERVE:=3}"
 : "${KAIROS_GATE:=1}"
 : "${KAIROS_PREDICT_DEFAULT:=60000}"
+: "${KAIROS_TURNS_KEEP:=200}"
 
 kairos_now() { date +%s; }
 

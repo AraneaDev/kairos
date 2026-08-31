@@ -526,6 +526,37 @@ kairos_record_turn "$acct" s2 10
 kairos_record_turn "$acct" s2 10
 kairos_record_turn "$acct" s2 1000
 is "a single spike does not become the estimate" "10" "$(kairos_predict "$acct" s2)"
+
+# A malformed billable must not become the prediction. Filtering it leaves
+# too few usable turns, so the estimate falls back rather than inventing one.
+zpart=$(kairos_partition "zz-malformed")
+printf '1\ts1\t100\n2\ts1\t200\n3\ts1\t9999abc\n' > "$zpart/turns.tsv"
+is "a malformed turn cannot become the estimate" "60000" "$(kairos_predict zz-malformed s1)"
+
+# A zero estimate would disable the gate, since the caller multiplies it by
+# the reserve and zero always looks affordable.
+printf '1\ts1\t0\n2\ts1\t0\n3\ts1\t0\n4\ts1\t0\n' > "$zpart/turns.tsv"
+is "an all-zero history floors to the default" "60000" "$(kairos_predict zz-malformed s1)"
+
+# A tab in a session id would shift the other fields and put billable in the
+# wrong column.
+tpart=$(kairos_partition "zz-tab")
+kairos_record_turn "zz-tab" "$(printf 'a\tb')" 123
+is "a tabbed session id still writes three fields" "3" "$(awk -F'\t' 'NR==1 {print NF}' "$tpart/turns.tsv")"
+is "and the billable lands in the third" "123" "$(awk -F'\t' 'NR==1 {print $3}' "$tpart/turns.tsv")"
+
+# The write and read paths must agree on what an empty session id means.
+kairos_record_turn "zz-empty" "" 111
+kairos_record_turn "zz-empty" "" 222
+kairos_record_turn "zz-empty" "" 333
+is "an empty session id is readable back" "333" "$(kairos_predict zz-empty "")"
+
+# The turns file must not grow without bound, since the gate scans it on
+# every prompt.
+kpart=$(kairos_partition "zz-keep")
+i=0
+while [ "$i" -lt 25 ]; do KAIROS_TURNS_KEEP=5 kairos_record_turn "zz-keep" s1 10; i=$((i + 1)); done
+is "the turns file is trimmed as it grows" "yes" "$([ "$(wc -l < "$kpart/turns.tsv" | tr -d ' ')" -le 10 ] && echo yes || echo no)"
 teardown_env
 
 printf '\n%s passed, %s failed\n' "$PASS" "$FAIL"
