@@ -90,5 +90,39 @@ is "kairos_ensure_dir creates nested dirs" "yes" "$([ -d "$KAIROS_TESTDIR/a/b/c"
 asserts "kairos_ensure_dir is idempotent" kairos_ensure_dir "$KAIROS_TESTDIR/a/b/c"
 teardown_env
 
+echo
+echo "lib/account.sh"
+setup_env
+# shellcheck source=/dev/null
+. "$LIB/common.sh"
+# shellcheck source=/dev/null
+. "$LIB/account.sh"
+
+is "reads the active account uuid" "aaaaaaaa-1111-2222-3333-444444444444" "$(kairos_active_account)"
+
+part=$(kairos_partition "aaaaaaaa-1111-2222-3333-444444444444")
+is "partition path" "$KAIROS_HOME/accounts/aaaaaaaa-1111-2222-3333-444444444444" "$part"
+is "partition directory is created" "yes" "$([ -d "$part" ] && echo yes || echo no)"
+
+kairos_account_record "aaaaaaaa-1111-2222-3333-444444444444"
+is "records the organisation type" "claude_pro" "$(kairos_meta_get "$part" org_type)"
+is "records the rate tier" "default_claude" "$(kairos_meta_get "$part" rate_tier)"
+is "never records the email address" "" "$(grep -c 'nobody@example.com' "$part/meta" 2>/dev/null | tr -d ' ' | sed 's/^0$//')"
+
+is "labels a pro account" "Pro (…444444)" "$(kairos_account_label "aaaaaaaa-1111-2222-3333-444444444444")"
+kairos_meta_set "$part" alias "work laptop"
+is "an alias wins over the derived label" "work laptop" "$(kairos_account_label "aaaaaaaa-1111-2222-3333-444444444444")"
+is "setting an alias preserves other keys" "claude_pro" "$(kairos_meta_get "$part" org_type)"
+
+first=$(kairos_meta_get "$part" first_seen)
+kairos_account_record "aaaaaaaa-1111-2222-3333-444444444444"
+is "first_seen is written once and never moves" "$first" "$(kairos_meta_get "$part" first_seen)"
+
+# The fallback path: no readable claude.json at all.
+rm -f "$KAIROS_CLAUDE_JSON"
+is "falls back to a named unknown account" "unknown" "$(kairos_active_account || true)"
+refutes "and signals the fallback with a non-zero exit" kairos_active_account
+teardown_env
+
 printf '\n%s passed, %s failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
