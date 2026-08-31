@@ -355,6 +355,28 @@ $(kairos_block "$acct")
 EOF
 is "the applicable refusal wins regardless of file order" "1030000" "$bend"
 
+# The failure the wall-window test exists to prevent: a refusal recorded
+# recently, whose stated reset has nonetheless already passed. Selecting on the
+# hit time alone accepts it, drags the window back and hides real consumption.
+printf '1024100\t50\t1020000\n' > "$part/walls.tsv"
+read -r bstart bend bused <<EOF
+$(kairos_block "$acct")
+EOF
+is "a recent refusal stating a passed reset is ignored" "1041600" "$bend"
+is "so recent usage is not hidden by it" "900" "$bused"
+
+# Two refusals can both still cover the latest activity if the window rolled
+# and a second was recorded. The later reset is the server's more recent word,
+# so it wins. Selecting the earlier one would shorten the countdown.
+{
+  printf '1024100\t50\t1030000\n'
+  printf '1024200\t60\t1035000\n'
+} > "$part/walls.tsv"
+read -r bstart bend bused <<EOF
+$(kairos_block "$acct")
+EOF
+is "the later of two applicable refusals wins" "1035000" "$bend"
+
 # A ledger of nothing but garbage has nothing to report, and must not render
 # as a window beginning at the epoch.
 rm -f "$part/walls.tsv"
