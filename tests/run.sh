@@ -175,5 +175,52 @@ is "falls back to a named unknown account" "unknown" "$(kairos_active_account ||
 refutes "and signals the fallback with a non-zero exit" kairos_active_account
 teardown_env
 
+echo
+echo "lib/meter.sh: the ledger"
+setup_env
+# shellcheck source=/dev/null
+. "$LIB/common.sh"
+# shellcheck source=/dev/null
+. "$LIB/account.sh"
+# shellcheck source=/dev/null
+. "$LIB/meter.sh"
+
+acct="aaaaaaaa-1111-2222-3333-444444444444"
+part=$(kairos_partition "$acct")
+mkdir -p "$KAIROS_PROJECTS_DIR/proj"
+cp "$ROOT/tests/fixtures/usage-basic.jsonl" "$KAIROS_PROJECTS_DIR/proj/a.jsonl"
+
+kairos_refresh "$acct"
+is "one ledger row per assistant message" "3" "$(wc -l < "$part/ledger.tsv" | tr -d ' ')"
+is "billable excludes cache reads" "1110" "$(awk -F'\t' 'NR==1 {print $5}' "$part/ledger.tsv")"
+is "rows are stamped with the account" "$acct" "$(awk -F'\t' 'NR==1 {print $2}' "$part/ledger.tsv")"
+is "rows carry the session id" "s1" "$(awk -F'\t' 'NR==1 {print $3}' "$part/ledger.tsv")"
+is "rows carry the model" "claude-opus-5" "$(awk -F'\t' 'NR==1 {print $4}' "$part/ledger.tsv")"
+is "a fractional-second timestamp parses" "1788170400" "$(awk -F'\t' 'NR==1 {print $1}' "$part/ledger.tsv")"
+is "the second row keeps its fractional timestamp" "1788170460" "$(awk -F'\t' 'NR==2 {print $1}' "$part/ledger.tsv")"
+
+kairos_refresh "$acct"
+is "a second refresh reads no bytes twice" "3" "$(wc -l < "$part/ledger.tsv" | tr -d ' ')"
+
+printf '%s\n' '{"type":"assistant","sessionId":"s1","timestamp":"2026-08-31T10:03:00.000Z","message":{"model":"claude-opus-5","usage":{"input_tokens":2,"cache_creation_input_tokens":3,"cache_read_input_tokens":5000000,"output_tokens":5}}}' >> "$KAIROS_PROJECTS_DIR/proj/a.jsonl"
+kairos_refresh "$acct"
+is "an appended line is picked up" "4" "$(wc -l < "$part/ledger.tsv" | tr -d ' ')"
+is "and only the new bytes were read" "10" "$(awk -F'\t' 'NR==4 {print $5}' "$part/ledger.tsv")"
+
+printf '%s\n' '{"type":"assistant","sessionId":"s9","timestamp":"2026-08-31T10:04' >> "$KAIROS_PROJECTS_DIR/proj/a.jsonl"
+kairos_refresh "$acct"
+is "a half-written line is skipped, not fatal" "4" "$(wc -l < "$part/ledger.tsv" | tr -d ' ')"
+
+# A file that shrank was replaced, so its cursor has to reset.
+cp "$ROOT/tests/fixtures/usage-basic.jsonl" "$KAIROS_PROJECTS_DIR/proj/a.jsonl"
+kairos_refresh "$acct"
+is "a shrunken file is re-read from the start" "7" "$(wc -l < "$part/ledger.tsv" | tr -d ' ')"
+
+# Pruning keeps the window bounded no matter how long kairos has been installed.
+printf '1\t%s\ts0\tm\t999\n' "$acct" >> "$part/ledger.tsv"
+kairos_prune "$acct"
+is "pruning drops rows outside the window" "7" "$(wc -l < "$part/ledger.tsv" | tr -d ' ')"
+teardown_env
+
 printf '\n%s passed, %s failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
