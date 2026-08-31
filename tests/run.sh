@@ -412,5 +412,54 @@ rm -f "$part/ledger.tsv" "$part/walls.tsv"
 is "an empty ledger reports zeroes" "0	0	0" "$(kairos_block "$acct")"
 teardown_env
 
+echo
+echo "lib/wall.sh"
+setup_env
+# shellcheck source=/dev/null
+. "$LIB/common.sh"
+# shellcheck source=/dev/null
+. "$LIB/account.sh"
+# shellcheck source=/dev/null
+. "$LIB/meter.sh"
+# shellcheck source=/dev/null
+. "$LIB/wall.sh"
+
+acct="cccc"
+part=$(kairos_partition "$acct")
+kairos_meta_set "$part" first_seen 1
+
+is "an uncalibrated account reports no band at all" "0	0	0" "$(kairos_band "$acct")"
+
+mkdir -p "$KAIROS_PROJECTS_DIR/proj"
+cp "$ROOT/tests/fixtures/refusal.jsonl" "$KAIROS_PROJECTS_DIR/proj/r.jsonl"
+# Consumption inside the refused block, so the wall has a value to record.
+{
+  printf '1788160000\t%s\ts1\tm\t2000000\n' "$acct"
+  printf '1788170000\t%s\ts1\tm\t2000000\n' "$acct"
+} > "$part/ledger.tsv"
+
+kairos_harvest_walls "$acct"
+is "repeated refusals collapse to one wall" "1" "$(wc -l < "$part/walls.tsv" | tr -d ' ')"
+is "a weekly refusal is not recorded as a five-hour wall" "0" "$(grep -c '1787220000' "$part/walls.tsv" | tr -d ' ')"
+is "the wall records what was consumed" "4000000" "$(awk -F'\t' 'NR==1 {print $2}' "$part/walls.tsv")"
+is "the wall records the stated reset" "1788175200" "$(awk -F'\t' 'NR==1 {print $3}' "$part/walls.tsv")"
+
+kairos_harvest_walls "$acct"
+is "harvesting twice does not duplicate a wall" "1" "$(wc -l < "$part/walls.tsv" | tr -d ' ')"
+
+is "one wall gives a wide band around it" "3400000	4600000	1" "$(kairos_band "$acct")"
+
+printf '1788200000\t4200000\t1788210000\n' >> "$part/walls.tsv"
+printf '1788300000\t4400000\t1788310000\n' >> "$part/walls.tsv"
+is "three walls tighten the band" "3800000	4620000	3" "$(kairos_band "$acct")"
+
+# A wall from before this account was ever seen cannot be trusted to be its own.
+rm -f "$part/walls.tsv"
+kairos_meta_set "$part" first_seen 1788999999
+kairos_harvest_walls "$acct"
+is "a wall predating first_seen is not used" "0" "$([ -s "$part/walls.tsv" ] && wc -l < "$part/walls.tsv" | tr -d ' ' || echo 0)"
+is "but it is kept aside" "1" "$(wc -l < "$part/walls.unattributed.tsv" | tr -d ' ')"
+teardown_env
+
 printf '\n%s passed, %s failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
