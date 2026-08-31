@@ -484,5 +484,49 @@ kairos_harvest_walls "$seen"
 is "a wall exactly at first_seen is attributed" "1" "$(wc -l < "$spart/walls.tsv" | tr -d ' ')"
 teardown_env
 
+echo
+echo "lib/predict.sh"
+setup_env
+# shellcheck source=/dev/null
+. "$LIB/common.sh"
+# shellcheck source=/dev/null
+. "$LIB/account.sh"
+# shellcheck source=/dev/null
+. "$LIB/predict.sh"
+
+is "p75 of four values takes the third" "30" "$(printf '10\n20\n30\n40\n' | kairos_p75)"
+is "p75 of one value is that value" "7" "$(printf '7\n' | kairos_p75)"
+is "p75 ignores input order" "30" "$(printf '40\n10\n30\n20\n' | kairos_p75)"
+is "p75 of nothing is empty" "" "$(printf '' | kairos_p75)"
+
+acct="dddd"
+is "a cold account falls back to the default" "60000" "$(kairos_predict "$acct" s1)"
+
+kairos_record_turn "$acct" s1 100
+kairos_record_turn "$acct" s1 200
+is "fewer than three turns still falls back" "60000" "$(kairos_predict "$acct" s1)"
+
+kairos_record_turn "$acct" s1 300
+kairos_record_turn "$acct" s1 4000
+is "four turns in this session gives their p75" "300" "$(kairos_predict "$acct" s1)"
+
+is "a cold session borrows the account history" "300" "$(kairos_predict "$acct" s-new)"
+
+# Only the last eight turns count, so an old spike stops dominating.
+i=0
+while [ "$i" -lt 8 ]; do kairos_record_turn "$acct" s1 500; i=$((i + 1)); done
+is "only the last eight turns are used" "500" "$(kairos_predict "$acct" s1)"
+
+# p75 leans high without being dragged to the top: one spike moves the estimate
+# off the median, but a single outlier does not become the estimate.
+part=$(kairos_partition "$acct")
+: > "$part/turns.tsv"
+kairos_record_turn "$acct" s2 10
+kairos_record_turn "$acct" s2 10
+kairos_record_turn "$acct" s2 10
+kairos_record_turn "$acct" s2 1000
+is "a single spike does not become the estimate" "10" "$(kairos_predict "$acct" s2)"
+teardown_env
+
 printf '\n%s passed, %s failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
