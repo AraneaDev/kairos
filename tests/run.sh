@@ -606,6 +606,31 @@ echo '{"session_id":"s9"}' | bash "$ROOT/hooks/scripts/stop.sh" >/dev/null 2>&1
 is "a second stop with no marker records nothing" "1" "$(wc -l < "$part/turns.tsv" | tr -d ' ')"
 
 is "stop always exits zero" "0" "$(echo '{}' | bash "$ROOT/hooks/scripts/stop.sh" >/dev/null 2>&1; echo $?)"
+
+# Two Stop hooks racing for one marker must record the turn once, not twice.
+# Separate processes, because a backgrounded function shares the parent's PID
+# and would not exercise the claim at all.
+racepart=$(kairos_partition "$acct")
+: > "$racepart/turns.tsv"
+race_now=$(kairos_now)
+printf '%s\ts9\n' "$race_now" > "$racepart/turn.start"
+printf '%s\t%s\ts9\tm\t500\n' "$((race_now + 5))" "$acct" > "$racepart/ledger.tsv"
+worker="$KAIROS_TESTDIR/stopworker.sh"
+printf '#!/usr/bin/env bash\necho %s | bash %s >/dev/null 2>&1\n' \
+  "'{\"session_id\":\"s9\"}'" "$ROOT/hooks/scripts/stop.sh" > "$worker"
+bash "$worker" & bash "$worker" & bash "$worker" &
+wait
+is "racing stop hooks record the turn once" "1" "$(wc -l < "$racepart/turns.tsv" | tr -d ' ')"
+
+# A malformed marker must record nothing rather than scoring a real turn as
+# free, which would poison the predictor with a value that never happened.
+: > "$racepart/turns.tsv"
+printf 'not-an-epoch\ts9\n' > "$racepart/turn.start"
+printf '%s\t%s\ts9\tm\t500\n' "$(kairos_now)" "$acct" > "$racepart/ledger.tsv"
+echo '{"session_id":"s9"}' | bash "$ROOT/hooks/scripts/stop.sh" >/dev/null 2>&1
+is "a malformed marker records nothing, not a free turn" "0" \
+  "$([ -s "$racepart/turns.tsv" ] && wc -l < "$racepart/turns.tsv" | tr -d ' ' || echo 0)"
+rm -f "$racepart/turn.start"
 teardown_env
 
 printf '\n%s passed, %s failed\n' "$PASS" "$FAIL"

@@ -27,11 +27,27 @@ part=$(kairos_partition "$uuid") || exit 0
 marker="$part/turn.start"
 [ -f "$marker" ] || exit 0
 
-started=$(awk -F'\t' 'NR == 1 { print $1 }' "$marker")
-marked_session=$(awk -F'\t' 'NR == 1 { print $2 }' "$marker")
-[ -n "$session" ] || session=$marked_session
-rm -f "$marker"
+# Claim the marker by renaming it. mv is atomic within a directory, so if two
+# Stop hooks race, exactly one gets the turn and the other finds nothing to do.
+# Reading and then deleting would let both read the same marker and record the
+# turn twice, which does not error, it just quietly biases every later
+# prediction.
+claimed="$marker.claimed.$$"
+mv "$marker" "$claimed" 2>/dev/null || exit 0
+
+started=$(awk -F'\t' 'NR == 1 { print $1 }' "$claimed")
+marked_session=$(awk -F'\t' 'NR == 1 { print $2 }' "$claimed")
+rm -f "$claimed"
 [ -n "$started" ] || exit 0
+
+# A marker whose epoch is not a number would make the comparison below fall
+# back to string semantics and silently score the turn as free. Recording
+# nothing is the honest outcome; recording zero would poison the predictor.
+case "$started" in
+  ''|*[!0-9]*) exit 0 ;;
+esac
+
+[ -n "$session" ] || session=$marked_session
 
 kairos_refresh "$uuid"
 kairos_prune "$uuid"
