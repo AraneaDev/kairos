@@ -695,5 +695,55 @@ is "a long turn still records rather than being swept" "1" \
   "$(wc -l < "$agepart/turns.tsv" | tr -d ' ')"
 teardown_env
 
+echo
+echo "lib/format.sh"
+setup_env
+# shellcheck source=/dev/null
+. "$LIB/common.sh"
+# shellcheck source=/dev/null
+. "$LIB/account.sh"
+# shellcheck source=/dev/null
+. "$LIB/meter.sh"
+# shellcheck source=/dev/null
+. "$LIB/wall.sh"
+# shellcheck source=/dev/null
+. "$LIB/predict.sh"
+# shellcheck source=/dev/null
+. "$LIB/format.sh"
+
+is "millions" "1.42M" "$(kairos_human 1420000)"
+is "thousands" "37k" "$(kairos_human 37000)"
+is "small numbers stay whole" "900" "$(kairos_human 900)"
+is "zero" "0" "$(kairos_human 0)"
+
+is "hours and minutes" "2h41m" "$(kairos_duration 9660)"
+is "minutes only" "41m" "$(kairos_duration 2460)"
+is "seconds only" "9s" "$(kairos_duration 9)"
+is "already past" "0s" "$(kairos_duration -5)"
+
+is "a percentage" "60" "$(kairos_pct 3000 5000)"
+is "a percentage of nothing is zero" "0" "$(kairos_pct 3000 0)"
+
+acct="aaaaaaaa-1111-2222-3333-444444444444"
+part=$(kairos_partition "$acct")
+kairos_account_record "$acct"
+now=$(kairos_now)
+{
+  printf '%s\t%s\ts1\tclaude-opus-5\t1000000\n' "$((now - 3600))" "$acct"
+  printf '%s\t%s\ts1\tclaude-sonnet-5\t840000\n' "$((now - 60))" "$acct"
+} > "$part/ledger.tsv"
+
+report=$(kairos_report "$acct")
+contains "the report names the account" "Pro (…444444)" "$report"
+contains "the report shows what was used" "1.84M" "$report"
+contains "the report shows a band, not a number" "%" "$report"
+contains "the report shows a burn rate" "burn" "$report"
+contains "the report shows the model split" "claude-opus-5" "$report"
+
+out=$(bash "$ROOT/tools/kairos.sh" report 2>/dev/null)
+contains "the CLI prints the report" "Pro (…444444)" "$out"
+is "an unknown subcommand exits non-zero" "1" "$(bash "$ROOT/tools/kairos.sh" nonsense >/dev/null 2>&1; echo $?)"
+teardown_env
+
 printf '\n%s passed, %s failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
