@@ -85,3 +85,58 @@ kairos_prune() {
   kairos_unlock "$kairos_pdir"
   return 0
 }
+
+# Where the current five-hour block starts and ends, and what has been spent
+# inside it. Prints "start<TAB>end<TAB>consumed".
+#
+# A window runs exactly five hours from where it opened, and the next one opens
+# at the first message after the previous expired, floored to ten minutes. That
+# is not a guess: reconstructing windows this way reproduces two of the three
+# recorded resets on this machine to the minute, and the ten-minute floor is
+# the granularity the server itself reports resets on.
+#
+# Chaining is the part that is easy to get wrong. An earlier version opened a
+# window only after an idle gap of five hours, which meant a fourteen-hour
+# working day was reported as one window with a reset time already in the past.
+#
+# When a refusal has been recorded inside the window, its resetsAt replaces the
+# computed boundary, because the server's word beats arithmetic.
+kairos_block() {
+  kairos_buuid=${1:-unknown}
+  kairos_bdir=$(kairos_partition "$kairos_buuid") || { printf '0\t0\t0\n'; return 0; }
+  kairos_bled="$kairos_bdir/ledger.tsv"
+  if [ ! -s "$kairos_bled" ]; then
+    printf '0\t0\t0\n'
+    return 0
+  fi
+
+  kairos_bres=$(sort -n "$kairos_bled" | awk -F'\t' -v gap="$KAIROS_BLOCK_SECONDS" '
+    {
+      if (start == "" || $1 >= start + gap) start = $1 - ($1 % 600)
+      ts[NR] = $1
+      amt[NR] = $5
+    }
+    END {
+      if (start == "") { print "0\t0\t0"; exit }
+      total = 0
+      for (i = 1; i <= NR; i++) if (ts[i] >= start) total += amt[i]
+      printf "%d\t%d\t%d\n", start, start + gap, total
+    }')
+
+  kairos_bstart=$(printf '%s' "$kairos_bres" | cut -f1)
+  kairos_bend=$(printf '%s' "$kairos_bres" | cut -f2)
+  kairos_bused=$(printf '%s' "$kairos_bres" | cut -f3)
+
+  kairos_bwalls="$kairos_bdir/walls.tsv"
+  if [ -s "$kairos_bwalls" ] && [ "$kairos_bstart" -gt 0 ]; then
+    kairos_breset=$(awk -F'\t' -v s="$kairos_bstart" '$1 >= s { print $3; exit }' "$kairos_bwalls")
+    if [ -n "$kairos_breset" ]; then
+      kairos_bend=$kairos_breset
+      kairos_bstart=$((kairos_breset - KAIROS_BLOCK_SECONDS))
+      kairos_bused=$(awk -F'\t' -v s="$kairos_bstart" -v e="$kairos_bend" \
+        '$1 >= s && $1 <= e { t += $5 } END { printf "%d", t + 0 }' "$kairos_bled")
+    fi
+  fi
+
+  printf '%s\t%s\t%s\n' "$kairos_bstart" "$kairos_bend" "$kairos_bused"
+}

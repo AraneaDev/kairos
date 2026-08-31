@@ -297,5 +297,72 @@ is "concurrent refresh does not overcount" "3" "$(wc -l < "$part/ledger.tsv" | t
 
 teardown_env
 
+echo
+echo "lib/meter.sh: blocks"
+setup_env
+# shellcheck source=/dev/null
+. "$LIB/common.sh"
+# shellcheck source=/dev/null
+. "$LIB/account.sh"
+# shellcheck source=/dev/null
+. "$LIB/meter.sh"
+
+acct="bbbb"
+part=$(kairos_partition "$acct")
+
+# Two blocks: three rows, then a six-hour gap, then two more.
+{
+  printf '1000000\t%s\ts1\tm\t100\n' "$acct"
+  printf '1001000\t%s\ts1\tm\t200\n' "$acct"
+  printf '1002000\t%s\ts1\tm\t300\n' "$acct"
+  printf '1023600\t%s\ts2\tm\t400\n' "$acct"
+  printf '1024000\t%s\ts2\tm\t500\n' "$acct"
+} > "$part/ledger.tsv"
+
+read -r bstart bend bused <<EOF
+$(kairos_block "$acct")
+EOF
+is "a gap of five hours opens a new block" "1023600" "$bstart"
+is "a block ends five hours after it opens" "1041600" "$bend"
+is "only the current block is counted" "900" "$bused"
+
+# A recorded refusal states the true boundary, and beats the computed one.
+printf '1024100\t950\t1030000\n' > "$part/walls.tsv"
+read -r bstart bend bused <<EOF
+$(kairos_block "$acct")
+EOF
+is "a recorded refusal overrides the computed end" "1030000" "$bend"
+is "and shifts the start to match" "1012000" "$bstart"
+is "consumption is recounted over the corrected block" "900" "$bused"
+
+# Continuous work must roll into a new window when the old one expires. This is
+# the case a gap-only rule gets wrong: without chaining, a long working day is
+# reported as one window whose reset time is already in the past.
+{
+  printf '2000000\t%s\ts1\tm\t100\n' "$acct"
+  printf '2010000\t%s\ts1\tm\t100\n' "$acct"
+  printf '2020000\t%s\ts1\tm\t100\n' "$acct"
+  printf '2030000\t%s\ts1\tm\t700\n' "$acct"
+} > "$part/ledger.tsv"
+read -r bstart bend bused <<EOF
+$(kairos_block "$acct")
+EOF
+is "continuous work rolls into a fresh window" "2019600" "$bstart"
+is "whose end is five hours past that start" "2037600" "$bend"
+is "counting only what the fresh window holds" "800" "$bused"
+
+# Window starts floor to ten minutes, which is the granularity the server
+# reports resets on.
+printf '3000517\t%s\ts1\tm\t5\n' "$acct" > "$part/ledger.tsv"
+read -r bstart bend bused <<EOF
+$(kairos_block "$acct")
+EOF
+is "a window start floors to ten minutes" "3000000" "$bstart"
+
+# An empty ledger must be answerable, not an error.
+rm -f "$part/ledger.tsv" "$part/walls.tsv"
+is "an empty ledger reports zeroes" "0	0	0" "$(kairos_block "$acct")"
+teardown_env
+
 printf '\n%s passed, %s failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
