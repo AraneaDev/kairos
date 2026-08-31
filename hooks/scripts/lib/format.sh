@@ -44,13 +44,29 @@ EOF
   fi
 
   printf '%s\n' "$(kairos_account_label "$kairos_ruuid")"
-  printf '  %s used · %s–%s%% of the wall · resets in %s\n' \
-    "$(kairos_human "$kairos_rused")" \
-    "$(kairos_pct "$kairos_rused" "$kairos_rhigh")" \
-    "$(kairos_pct "$kairos_rused" "$kairos_rlow")" \
-    "$(kairos_duration $((kairos_rend - kairos_rnow)))"
-  printf '  band %s–%s from %s recorded wall(s)\n' \
-    "$(kairos_human "$kairos_rlow")" "$(kairos_human "$kairos_rhigh")" "$kairos_rconf"
+  if [ "$kairos_rconf" -eq 1 ]; then
+    kairos_rwalls="wall"
+  else
+    kairos_rwalls="walls"
+  fi
+  if [ "$kairos_rconf" -eq 0 ]; then
+    # No refusal has ever been recorded for this account, so there is no
+    # ceiling to measure against. Saying "0%" here would read as "nothing
+    # spent", which is the opposite of the truth, so say what is actually
+    # the case: kairos is watching but will not interrupt yet.
+    printf '  %s used · no ceiling recorded yet, so kairos will not interrupt\n' \
+      "$(kairos_human "$kairos_rused")"
+    printf '  resets in %s\n' "$(kairos_duration $((kairos_rend - kairos_rnow)))"
+  else
+    printf '  %s used · %s–%s%% of the wall · resets in %s\n' \
+      "$(kairos_human "$kairos_rused")" \
+      "$(kairos_pct "$kairos_rused" "$kairos_rhigh")" \
+      "$(kairos_pct "$kairos_rused" "$kairos_rlow")" \
+      "$(kairos_duration $((kairos_rend - kairos_rnow)))"
+    printf '  band %s to %s, from %s recorded %s\n' \
+      "$(kairos_human "$kairos_rlow")" "$(kairos_human "$kairos_rhigh")" \
+      "$kairos_rconf" "$kairos_rwalls"
+  fi
   printf '  burn %s/h over %s of this block\n' \
     "$(kairos_human "$kairos_rburn")" "$(kairos_duration "$kairos_relapsed")"
 

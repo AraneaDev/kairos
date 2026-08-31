@@ -732,6 +732,9 @@ now=$(kairos_now)
   printf '%s\t%s\ts1\tclaude-opus-5\t1000000\n' "$((now - 3600))" "$acct"
   printf '%s\t%s\ts1\tclaude-sonnet-5\t840000\n' "$((now - 60))" "$acct"
 } > "$part/ledger.tsv"
+# A recorded wall, so this account's report exercises the calibrated branch:
+# a band, a percentage, everything the section below asserts on.
+printf '%s\t5000000\t%s\n' "$((now - 3600))" "$((now + 3600))" > "$part/walls.tsv"
 
 report=$(kairos_report "$acct")
 contains "the report names the account" "Pro (…444444)" "$report"
@@ -739,6 +742,28 @@ contains "the report shows what was used" "1.84M" "$report"
 contains "the report shows a band, not a number" "%" "$report"
 contains "the report shows a burn rate" "burn" "$report"
 contains "the report shows the model split" "claude-opus-5" "$report"
+
+# An account with no recorded refusal has no ceiling, and the report must say
+# so. Printing a percentage here would read as "nothing spent" when the truth
+# is "spent an unknown fraction of an unknown ceiling".
+uncal=$(kairos_partition "zz-uncal")
+printf '%s\tzz-uncal\ts1\tm\t2840000\n' "$(kairos_now)" > "$uncal/ledger.tsv"
+uncalout=$(kairos_report "zz-uncal")
+contains "an uncalibrated account is told there is no ceiling yet" "no ceiling recorded yet" "$uncalout"
+case "$uncalout" in
+  *"% of the wall"*) fail "an uncalibrated report shows no percentage" "no percentage" "$uncalout" ;;
+  *) pass "an uncalibrated report shows no percentage" ;;
+esac
+case "$uncalout" in
+  *"band "*) fail "an uncalibrated report shows no band line" "no band line" "$uncalout" ;;
+  *) pass "an uncalibrated report shows no band line" ;;
+esac
+
+# One wall is a wall, not a wall(s).
+printf '1\t4000000\t2\n' > "$uncal/walls.tsv"
+contains "a single wall is described in the singular" "1 recorded wall" "$(kairos_report "zz-uncal")"
+printf '1\t4000000\t2\n2\t4200000\t3\n3\t4400000\t4\n' > "$uncal/walls.tsv"
+contains "several walls are described in the plural" "3 recorded walls" "$(kairos_report "zz-uncal")"
 
 out=$(bash "$ROOT/tools/kairos.sh" report 2>/dev/null)
 contains "the CLI prints the report" "Pro (…444444)" "$out"
