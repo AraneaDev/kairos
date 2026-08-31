@@ -64,5 +64,31 @@ is "setup_env creates a state dir" "yes" "$([ -d "$KAIROS_HOME" ] && echo yes ||
 is "setup_env writes a fake claude.json" "yes" "$([ -f "$KAIROS_CLAUDE_JSON" ] && echo yes || echo no)"
 teardown_env
 
+echo
+echo "lib/common.sh"
+setup_env
+# shellcheck source=/dev/null
+. "$LIB/common.sh"
+
+is "KAIROS_HOME honours the environment" "$KAIROS_TESTDIR/state" "$KAIROS_HOME"
+is "block length defaults to five hours" "18000" "$KAIROS_BLOCK_SECONDS"
+is "the seeded band low edge" "4100000" "$KAIROS_SEED_LOW"
+is "the seeded band high edge" "5700000" "$KAIROS_SEED_HIGH"
+
+now=$(kairos_now)
+case "$now" in
+  [0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]*) pass "kairos_now prints an epoch" ;;
+  *) fail "kairos_now prints an epoch" "at least nine digits" "$now" ;;
+esac
+
+is "kairos_size_of on a missing file" "0" "$(kairos_size_of "$KAIROS_TESTDIR/nope")"
+printf '12345' > "$KAIROS_TESTDIR/five"
+is "kairos_size_of counts bytes" "5" "$(kairos_size_of "$KAIROS_TESTDIR/five")"
+
+kairos_ensure_dir "$KAIROS_TESTDIR/a/b/c"
+is "kairos_ensure_dir creates nested dirs" "yes" "$([ -d "$KAIROS_TESTDIR/a/b/c" ] && echo yes || echo no)"
+asserts "kairos_ensure_dir is idempotent" kairos_ensure_dir "$KAIROS_TESTDIR/a/b/c"
+teardown_env
+
 printf '\n%s passed, %s failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
