@@ -575,5 +575,38 @@ is "a busy session cannot push a quiet one out of view" "50000" \
   "$(KAIROS_TURNS_KEEP=5 KAIROS_TURNS_READ=50 kairos_predict zz-crosstalk sessA)"
 teardown_env
 
+echo
+echo "hooks/stop.sh"
+setup_env
+# shellcheck source=/dev/null
+. "$LIB/common.sh"
+# shellcheck source=/dev/null
+. "$LIB/account.sh"
+
+acct="aaaaaaaa-1111-2222-3333-444444444444"
+part=$(kairos_partition "$acct")
+
+# A turn that began at a recent time and spent 700 across three ledger rows, with a row
+# from another session and a row from before the turn that must not be counted.
+kairos_turn_start=$(kairos_now)
+printf '%s\ts9\n' "$kairos_turn_start" > "$part/turn.start"
+{
+  printf '%s\t%s\ts9\tm\t9999\n' $((kairos_turn_start - 100)) "$acct"
+  printf '%s\t%s\ts9\tm\t200\n' $((kairos_turn_start + 10)) "$acct"
+  printf '%s\t%s\ts8\tm\t5555\n' $((kairos_turn_start + 20)) "$acct"
+  printf '%s\t%s\ts9\tm\t500\n' $((kairos_turn_start + 30)) "$acct"
+} > "$part/ledger.tsv"
+
+echo '{"session_id":"s9"}' | bash "$ROOT/hooks/scripts/stop.sh" >/dev/null 2>&1
+is "the turn is recorded" "1" "$(wc -l < "$part/turns.tsv" | tr -d ' ')"
+is "only this session's rows since the turn began are counted" "700" "$(awk -F'\t' 'NR==1 {print $3}' "$part/turns.tsv")"
+is "the marker is consumed" "no" "$([ -f "$part/turn.start" ] && echo yes || echo no)"
+
+echo '{"session_id":"s9"}' | bash "$ROOT/hooks/scripts/stop.sh" >/dev/null 2>&1
+is "a second stop with no marker records nothing" "1" "$(wc -l < "$part/turns.tsv" | tr -d ' ')"
+
+is "stop always exits zero" "0" "$(echo '{}' | bash "$ROOT/hooks/scripts/stop.sh" >/dev/null 2>&1; echo $?)"
+teardown_env
+
 printf '\n%s passed, %s failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
