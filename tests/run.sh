@@ -633,5 +633,35 @@ is "a malformed marker records nothing, not a free turn" "0" \
 rm -f "$racepart/turn.start"
 teardown_env
 
+echo
+echo "hooks/session-start.sh"
+setup_env
+# shellcheck source=/dev/null
+. "$LIB/common.sh"
+# shellcheck source=/dev/null
+. "$LIB/account.sh"
+
+acct="aaaaaaaa-1111-2222-3333-444444444444"
+out=$(echo '{"session_id":"sX"}' | bash "$ROOT/hooks/scripts/session-start.sh" 2>/dev/null)
+is "the session is bound to the active account" "$acct" "$(cat "$KAIROS_HOME/sessions/sX" 2>/dev/null)"
+is "the account meta is recorded" "claude_pro" "$(kairos_meta_get "$KAIROS_HOME/accounts/$acct" org_type)"
+is "first_seen is set on binding" "yes" "$([ -n "$(kairos_meta_get "$KAIROS_HOME/accounts/$acct" first_seen)" ] && echo yes || echo no)"
+is "nothing is printed when there is no stash" "" "$out"
+
+# An abandoned claim file is swept once it is old enough to be nobody's.
+sweeppart=$(kairos_partition "$acct")
+: > "$sweeppart/turn.start.claimed.999"
+touch -t 202601010000 "$sweeppart/turn.start.claimed.999" 2>/dev/null
+: > "$sweeppart/turn.start.claimed.888"
+echo '{"session_id":"sS"}' | bash "$ROOT/hooks/scripts/session-start.sh" >/dev/null 2>&1
+is "an old abandoned claim is swept" "no" "$([ -f "$sweeppart/turn.start.claimed.999" ] && echo yes || echo no)"
+is "a fresh claim is left alone" "yes" "$([ -f "$sweeppart/turn.start.claimed.888" ] && echo yes || echo no)"
+rm -f "$sweeppart/turn.start.claimed.888"
+
+is "session start exits zero with an unreadable claude.json" "0" \
+  "$(rm -f "$KAIROS_CLAUDE_JSON"; echo '{"session_id":"sY"}' | bash "$ROOT/hooks/scripts/session-start.sh" >/dev/null 2>&1; echo $?)"
+is "and falls back to the unknown partition" "unknown" "$(cat "$KAIROS_HOME/sessions/sY" 2>/dev/null)"
+teardown_env
+
 printf '\n%s passed, %s failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
