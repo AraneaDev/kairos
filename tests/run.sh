@@ -562,6 +562,17 @@ kpart=$(kairos_partition "zz-keep")
 i=0
 while [ "$i" -lt 25 ]; do KAIROS_TURNS_KEEP=5 kairos_record_turn "zz-keep" s1 10; i=$((i + 1)); done
 is "the turns file is trimmed as it grows" "yes" "$([ "$(wc -l < "$kpart/turns.tsv" | tr -d ' ')" -le 10 ] && echo yes || echo no)"
+
+# A quiet session's own history must not be pushed out of the read window by a
+# busy session's turns. Answering with another session's number would
+# under-predict, which is the direction that lets a wall arrive unwarned.
+xpart=$(kairos_partition "zz-crosstalk")
+i=0
+while [ "$i" -lt 3 ]; do printf '1\tsessA\t50000\n' >> "$xpart/turns.tsv"; i=$((i + 1)); done
+i=0
+while [ "$i" -lt 20 ]; do printf '2\tsessB\t100\n' >> "$xpart/turns.tsv"; i=$((i + 1)); done
+is "a busy session cannot push a quiet one out of view" "50000" \
+  "$(KAIROS_TURNS_KEEP=5 KAIROS_TURNS_READ=50 kairos_predict zz-crosstalk sessA)"
 teardown_env
 
 printf '\n%s passed, %s failed\n' "$PASS" "$FAIL"

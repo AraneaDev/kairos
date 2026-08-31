@@ -51,7 +51,8 @@ kairos_record_turn() {
     # lost. That is accepted: it is one row out of KAIROS_TURNS_KEEP feeding a
     # percentile of eight, and closing it would mean every append blocking on
     # a lock, which risks losing a turn outright when a lock is stale held.
-    # Reads are tail bounded above, so this trim only bounds disk.
+    # Reads are bounded by KAIROS_TURNS_READ, which is deliberately far larger
+    # than this ceiling, so a skipped trim costs disk rather than correctness.
     if kairos_try_lock "$kairos_tdir"; then
       if tail -n "$KAIROS_TURNS_KEEP" "$kairos_tfile" > "$kairos_tfile.tmp.$$" 2>/dev/null; then
         mv "$kairos_tfile.tmp.$$" "$kairos_tfile"
@@ -76,12 +77,12 @@ kairos_predict() {
     return 0
   fi
 
-  kairos_pvals=$(tail -n $((KAIROS_TURNS_KEEP * 2)) "$kairos_pturns" 2>/dev/null \
+  kairos_pvals=$(tail -n "$KAIROS_TURNS_READ" "$kairos_pturns" 2>/dev/null \
     | awk -F'\t' -v s="$kairos_psession" '$2 == s && $3 ~ /^[0-9]+$/ { print $3 }' \
     | tail -n "$KAIROS_TURN_WINDOW")
   kairos_pcount=$(printf '%s\n' "$kairos_pvals" | grep -c '^[0-9][0-9]*$')
   if [ "${kairos_pcount:-0}" -lt 3 ]; then
-    kairos_pvals=$(tail -n $((KAIROS_TURNS_KEEP * 2)) "$kairos_pturns" 2>/dev/null \
+    kairos_pvals=$(tail -n "$KAIROS_TURNS_READ" "$kairos_pturns" 2>/dev/null \
       | awk -F'\t' '$3 ~ /^[0-9]+$/ { print $3 }' \
       | tail -n "$KAIROS_TURN_WINDOW")
     kairos_pcount=$(printf '%s\n' "$kairos_pvals" | grep -c '^[0-9][0-9]*$')

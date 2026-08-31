@@ -13,6 +13,13 @@
 : "${KAIROS_PREDICT_DEFAULT:=60000}"
 : "${KAIROS_TURNS_KEEP:=200}"
 
+# The read window must always exceed the largest file the trim permits. If it
+# does not, a quiet session's turns can be pushed out of view by a busy one and
+# the estimate silently comes from the wrong history. The trim keeps
+# KAIROS_TURNS_KEEP and fires above twice that, so ten times leaves five times
+# the headroom even when trims are being skipped.
+: "${KAIROS_TURNS_READ:=$((KAIROS_TURNS_KEEP * 10))}"
+
 kairos_now() { date +%s; }
 
 kairos_have_jq() { command -v jq >/dev/null 2>&1; }
