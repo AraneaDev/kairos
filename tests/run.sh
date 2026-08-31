@@ -545,7 +545,12 @@ kairos_record_turn "zz-tab" "$(printf 'a\tb')" 123
 is "a tabbed session id still writes three fields" "3" "$(awk -F'\t' 'NR==1 {print NF}' "$tpart/turns.tsv")"
 is "and the billable lands in the third" "123" "$(awk -F'\t' 'NR==1 {print $3}' "$tpart/turns.tsv")"
 
-# The write and read paths must agree on what an empty session id means.
+# The write and read paths must agree on what an empty session id means. The
+# other session's turns are here so the account-wide fallback would give a
+# different answer, which is what makes this assertion able to fail.
+kairos_record_turn "zz-empty" "s-other" 900
+kairos_record_turn "zz-empty" "s-other" 900
+kairos_record_turn "zz-empty" "s-other" 900
 kairos_record_turn "zz-empty" "" 111
 kairos_record_turn "zz-empty" "" 222
 kairos_record_turn "zz-empty" "" 333

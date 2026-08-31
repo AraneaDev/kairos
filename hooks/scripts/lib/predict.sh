@@ -43,10 +43,22 @@ kairos_record_turn() {
   kairos_tlines=$(wc -l < "$kairos_tfile" 2>/dev/null | tr -d '[:space:]')
   [ -n "$kairos_tlines" ] || return 0
   if [ "$kairos_tlines" -gt $((KAIROS_TURNS_KEEP * 2)) ]; then
-    if tail -n "$KAIROS_TURNS_KEEP" "$kairos_tfile" > "$kairos_tfile.tmp.$$" 2>/dev/null; then
-      mv "$kairos_tfile.tmp.$$" "$kairos_tfile"
+    # The append above is atomic. The trim is a read, a rewrite and a rename,
+    # so two of them at once would fight. Skipping when the lock is held costs
+    # nothing, because the next turn trims instead.
+    #
+    # A turn appended by another process between the tail and the mv is still
+    # lost. That is accepted: it is one row out of KAIROS_TURNS_KEEP feeding a
+    # percentile of eight, and closing it would mean every append blocking on
+    # a lock, which risks losing a turn outright when a lock is stale held.
+    # Reads are tail bounded above, so this trim only bounds disk.
+    if kairos_try_lock "$kairos_tdir"; then
+      if tail -n "$KAIROS_TURNS_KEEP" "$kairos_tfile" > "$kairos_tfile.tmp.$$" 2>/dev/null; then
+        mv "$kairos_tfile.tmp.$$" "$kairos_tfile"
+      fi
+      rm -f "$kairos_tfile.tmp.$$"
+      kairos_unlock "$kairos_tdir"
     fi
-    rm -f "$kairos_tfile.tmp.$$"
   fi
   return 0
 }
@@ -64,11 +76,14 @@ kairos_predict() {
     return 0
   fi
 
-  kairos_pvals=$(awk -F'\t' -v s="$kairos_psession" \
-    '$2 == s && $3 ~ /^[0-9]+$/ { print $3 }' "$kairos_pturns" | tail -n "$KAIROS_TURN_WINDOW")
+  kairos_pvals=$(tail -n $((KAIROS_TURNS_KEEP * 2)) "$kairos_pturns" 2>/dev/null \
+    | awk -F'\t' -v s="$kairos_psession" '$2 == s && $3 ~ /^[0-9]+$/ { print $3 }' \
+    | tail -n "$KAIROS_TURN_WINDOW")
   kairos_pcount=$(printf '%s\n' "$kairos_pvals" | grep -c '^[0-9][0-9]*$')
   if [ "${kairos_pcount:-0}" -lt 3 ]; then
-    kairos_pvals=$(awk -F'\t' '$3 ~ /^[0-9]+$/ { print $3 }' "$kairos_pturns" | tail -n "$KAIROS_TURN_WINDOW")
+    kairos_pvals=$(tail -n $((KAIROS_TURNS_KEEP * 2)) "$kairos_pturns" 2>/dev/null \
+      | awk -F'\t' '$3 ~ /^[0-9]+$/ { print $3 }' \
+      | tail -n "$KAIROS_TURN_WINDOW")
     kairos_pcount=$(printf '%s\n' "$kairos_pvals" | grep -c '^[0-9][0-9]*$')
   fi
   if [ "${kairos_pcount:-0}" -lt 3 ]; then
