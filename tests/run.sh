@@ -315,6 +315,7 @@ part=$(kairos_partition "$acct")
   printf '1000000\t%s\ts1\tm\t100\n' "$acct"
   printf '1001000\t%s\ts1\tm\t200\n' "$acct"
   printf '1002000\t%s\ts1\tm\t300\n' "$acct"
+  printf '1015000\t%s\ts1\tm\t250\n' "$acct"
   printf '1023600\t%s\ts2\tm\t400\n' "$acct"
   printf '1024000\t%s\ts2\tm\t500\n' "$acct"
 } > "$part/ledger.tsv"
@@ -333,7 +334,32 @@ $(kairos_block "$acct")
 EOF
 is "a recorded refusal overrides the computed end" "1030000" "$bend"
 is "and shifts the start to match" "1012000" "$bstart"
-is "consumption is recounted over the corrected block" "900" "$bused"
+is "consumption is recounted over the corrected block" "1150" "$bused"
+
+# A refusal whose window has already ended describes a past window, not this
+# one, and must not be allowed to move the block backwards and hide usage.
+printf '901000\t50\t920000\n' > "$part/walls.tsv"
+read -r bstart bend bused <<EOF
+$(kairos_block "$acct")
+EOF
+is "a refusal from an ended window is ignored" "1041600" "$bend"
+is "and the real consumption is still counted" "900" "$bused"
+
+# The pick must not depend on how walls.tsv happens to be ordered.
+{
+  printf '901000\t50\t920000\n'
+  printf '1024100\t950\t1030000\n'
+} > "$part/walls.tsv"
+read -r bstart bend bused <<EOF
+$(kairos_block "$acct")
+EOF
+is "the applicable refusal wins regardless of file order" "1030000" "$bend"
+
+# A ledger of nothing but garbage has nothing to report, and must not render
+# as a window beginning at the epoch.
+rm -f "$part/walls.tsv"
+printf 'not-a-number\tx\ty\tz\tw\n' > "$part/ledger.tsv"
+is "a ledger of garbage reports nothing, not 1970" "0	0	0" "$(kairos_block "$acct")"
 
 # Continuous work must roll into a new window when the old one expires. This is
 # the case a gap-only rule gets wrong: without chaining, a long working day is

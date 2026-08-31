@@ -112,14 +112,20 @@ kairos_block() {
 
   kairos_bres=$(sort -n "$kairos_bled" | awk -F'\t' -v gap="$KAIROS_BLOCK_SECONDS" '
     {
+      # Skip anything that is not a positive integer epoch. awk would coerce a
+      # garbage field to 0, which sets start to a literal 0 rather than leaving
+      # it unset, and the window would render as 1970 instead of reporting
+      # nothing to report.
+      if ($1 !~ /^[0-9]+$/ || $1 + 0 <= 0) next
       if (start == "" || $1 >= start + gap) start = $1 - ($1 % 600)
-      ts[NR] = $1
-      amt[NR] = $5
+      n++
+      ts[n] = $1
+      amt[n] = $5
     }
     END {
       if (start == "") { print "0\t0\t0"; exit }
       total = 0
-      for (i = 1; i <= NR; i++) if (ts[i] >= start) total += amt[i]
+      for (i = 1; i <= n; i++) if (ts[i] >= start) total += amt[i]
       printf "%d\t%d\t%d\n", start, start + gap, total
     }')
 
@@ -129,7 +135,19 @@ kairos_block() {
 
   kairos_bwalls="$kairos_bdir/walls.tsv"
   if [ -s "$kairos_bwalls" ] && [ "$kairos_bstart" -gt 0 ]; then
-    kairos_breset=$(awk -F'\t' -v s="$kairos_bstart" '$1 >= s { print $3; exit }' "$kairos_bwalls")
+    kairos_blast=$(awk -F'\t' '$1 ~ /^[0-9]+$/ && $1 + 0 > m { m = $1 } END { printf "%d", m + 0 }' "$kairos_bled")
+    # A refusal states the window [resets_at - gap, resets_at). Trust it only
+    # when that window still holds the most recent activity, which is what
+    # makes it the current window rather than one that has already ended.
+    #
+    # Without that test a stale or clock-skewed row moves the block into the
+    # past and drops real consumption from the count. This function feeds the
+    # gate, so usage it fails to see is a wall nobody warned you about.
+    #
+    # Picking by the largest qualifying resets_at rather than by file order,
+    # so the answer does not depend on how walls.tsv happens to be sorted.
+    kairos_breset=$(awk -F'\t' -v gap="$KAIROS_BLOCK_SECONDS" -v last="$kairos_blast" '
+      $3 ~ /^[0-9]+$/ && $3 - gap <= last && last < $3 { print $3 }' "$kairos_bwalls" | sort -n | tail -1)
     if [ -n "$kairos_breset" ]; then
       kairos_bend=$kairos_breset
       kairos_bstart=$((kairos_breset - KAIROS_BLOCK_SECONDS))
