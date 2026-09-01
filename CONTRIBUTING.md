@@ -8,14 +8,14 @@ cd kairos
 cp .githooks/pre-commit .githooks/pre-push .git/hooks/
 ```
 
-Copy the hooks rather than pointing `core.hooksPath` at `.githooks/`. A tracked
-hook only exists in the working tree while a branch containing it is checked
-out, so it would be missing on exactly the branches that predate it.
+Copy the hooks. Do not point `core.hooksPath` at `.githooks/`: a tracked hook
+only exists in the working tree while a branch containing it is checked out, so
+it would be missing on exactly the branches that predate it.
 
 `pre-commit` refuses a commit made directly on `main` and runs `bash -n` and
 ShellCheck over the staged content of any shell script. `pre-push` refuses a
-direct push to `main`. Both are guard rails rather than controls, and both can
-be bypassed once with `--no-verify` when you mean it.
+direct push to `main`. Neither is a control. Anyone can pass `--no-verify`, and
+a fresh clone will not have them until they are copied there too.
 
 ## Checks
 
@@ -77,7 +77,7 @@ GitHub does not start workflows for events raised by the built-in
 and reopen it once to start them, or set a `RELEASE_PLEASE_TOKEN` secret to a
 personal access token so the event is raised by a real account.
 
-## Rules that are enforced rather than asked for
+## Rules the build enforces
 
 - **Every `KAIROS_*` setting with a default must appear in the README**, and so
   must every `kairos` subcommand, and the test count badge must match what the
@@ -88,7 +88,7 @@ personal access token so the event is raised by a real account.
 - **`bash` and `jq` only** at runtime, and bash 3.2 compatible: no associative
   arrays, no `${var^^}`, no `mapfile`.
 
-## Rules that are not enforced but matter more
+## Rules that matter more
 
 **A hook must never break the user's session.** Every uncertain path exits 0
 and does nothing. Being wrong about the budget is a nuisance; stopping someone
@@ -97,13 +97,13 @@ mid-task because the meter failed is worse than having no meter.
 **Prove a new test can fail before you keep it.** Change the code so the
 property it names is violated, and watch that specific assertion go red. Nine
 assertions in this project's history turned out not to test what their names
-claimed, and every one was found by mutating the code rather than by reading
-the test. A test that cannot fail is worse than no test, because it reads as
+claimed, and every one was found by mutating the code. Reading the test caught
+none of them. A test that cannot fail is worse than no test, because it reads as
 coverage. If an assertion cannot be made to fail without becoming flaky, say so
-in a comment rather than shipping it: there is one of those in `tests/run.sh`
-already, and it explains itself.
+in a comment instead: there is one of those in `tests/run.sh` already, and it
+explains itself.
 
-**Do not make the meter guess.** kairos reports a range for the ceiling because
+**Do not make the meter guess.** Kairos reports a range for the ceiling because
 it does not know the ceiling, and reports nothing at all for an account it has
 never seen refused. If you find yourself adding a plausible default so the
 output looks more confident, that is the mistake this design was built to

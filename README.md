@@ -1,9 +1,9 @@
 <div align="center">
 
-# kairos
+# Kairos
 
 **The right moment, caught before it passes.**
-**kairos stops you before the usage limit does.**
+**Kairos stops you before the usage limit does.**
 
 [![Release](https://img.shields.io/github/v/release/AraneaDev/kairos?label=release&include_prereleases)](https://github.com/AraneaDev/kairos/releases)
 [![Tool page](https://img.shields.io/badge/tool%20page-aranea--development.nl-0b7285)](https://aranea-development.nl/en/tools/kairos)
@@ -35,9 +35,9 @@ notice is the failure itself:
 You've hit your session limit · resets 1:20pm (Europe/Amsterdam)
 ```
 
-kairos watches how much of the window you have spent, predicts what your next
+Kairos watches how much of the window you have spent, predicts what your next
 turn will cost, and stops the prompt before that turn takes you through the
-wall. When it stops you it asks what to do rather than deciding for you.
+wall. When it stops you it asks what to do, and leaves the choice with you.
 
 ```text
 kairos: predicted ~95k. 210k left before the optimistic wall,
@@ -58,7 +58,7 @@ the limit is. Both are reconstructed from the transcripts Claude Code already
 writes.
 
 That reconstruction is exact for consumption and inexact for the ceiling, so
-kairos reports the ceiling as a range and says how much evidence is behind it:
+Kairos reports the ceiling as a range and says how much evidence is behind it:
 
 ```text
 Max 20x (…eeffff)
@@ -74,7 +74,7 @@ Max 20x (…eeffff)
 The band narrows as evidence accumulates. One recorded refusal gives a wide
 range; three give a tighter one.
 
-**An account kairos has never seen refused gets no band at all, and is never
+**An account Kairos has never seen refused gets no band at all, and is never
 gated.** It measures, reports and predicts, and stays out of your way until it
 has observed a wall of that account's own:
 
@@ -91,14 +91,14 @@ range topped out at 5.7M. Those figures described one subscription, not the
 shape of the limit. A guessed ceiling would interrupt constantly on a larger
 plan while claiming to know something it never observed.
 
-So kairos starts knowing nothing about a new account, and it cannot be
+So Kairos starts knowing nothing about a new account, and it cannot be
 backfilled: nothing in the transcripts records which account paid for a
 message. It gets better as it runs.
 
 ## Two subscriptions
 
 If you hold more than one Claude plan and switch between them with `/login`,
-kairos keeps them apart. Everything it records is partitioned by account, a
+Kairos keeps them apart. Everything it records is partitioned by account, a
 session follows the account that is actually paying even if you switch part way
 through, and `kairos accounts` shows where each one stands:
 
@@ -108,14 +108,13 @@ active Max 20x (…eea8c8)    2.84M used · 53–72% · resets in 2h55m · band 
 ```
 
 A Max 5x and a Max 20x are told apart, because their ceilings differ by roughly
-four times and telling them apart is the point. An account kairos has not seen
-refused yet says so in place of a percentage, rather than showing a figure it
-cannot support.
+four times and telling them apart is the point. An account Kairos has not seen
+refused yet says so in place of a percentage it cannot support.
 
 ## Requirements
 
-`bash` and `jq`. That is the whole list. If `jq` is missing kairos says so once
-and then does nothing, rather than failing quietly.
+`bash` and `jq`. That is the whole list. If `jq` is missing Kairos says so once
+and then does nothing. It never fails quietly.
 
 ```text
 macOS           brew install jq
@@ -130,7 +129,7 @@ claude plugin marketplace add https://aranea-development.nl/plugins/marketplace.
 claude plugin install kairos@aranea
 ```
 
-Hooks are bound when a session starts, so start a new session before kairos
+Hooks are bound when a session starts, so start a new session before Kairos
 does anything. An already-running session will not pick it up.
 
 ## Commands
@@ -138,12 +137,12 @@ does anything. An already-running session will not pick it up.
 | Command | What it does |
 | --- | --- |
 | `kairos report` | The window, the band, the burn rate, the model split, the next-turn estimate. This is the default, so `/kairos` alone does the same. |
-| `kairos accounts` | Every account kairos has seen, where each stands, and which is active. |
+| `kairos accounts` | Every account Kairos has seen, where each stands, and which is active. |
 | `kairos alias <name>` | Give the active account a name of your own, used in place of the derived label. |
 | `kairos wait` | Hold until the window resets, in a detached process that survives a closed terminal, then ring the terminal that armed it. Set `KAIROS_NOTIFY_CMD` for anything louder. |
 | `kairos go` | Let the next prompt through, and print the one that was held so you can send it again. Spends itself once, then the gate re-arms. |
 | `kairos stop` | Drop the stashed prompt. |
-| `kairos calibrate` | Rescan every transcript for refusals kairos has not seen yet, and report what it found. |
+| `kairos calibrate` | Rescan every transcript for refusals Kairos has not seen yet, and report what it found. |
 
 ## How the gate decides
 
@@ -155,7 +154,7 @@ long tail of turns is what actually puts a session through a limit, so the
 estimate leans high on purpose.
 
 It gates against the **optimistic** edge, which means it stays quiet until even
-a generous ceiling is threatened. kairos would rather let a first wall happen
+a generous ceiling is threatened. Kairos would rather let a first wall happen
 than interrupt you wrongly for a month. Raise `KAIROS_RESERVE` if you want the
 other trade.
 
@@ -166,7 +165,7 @@ sourced if present.
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `KAIROS_HOME` | `~/.claude/kairos` | Where kairos keeps its state |
+| `KAIROS_HOME` | `~/.claude/kairos` | Where Kairos keeps its state |
 | `KAIROS_CLAUDE_JSON` | `~/.claude.json` | Where it reads the active account from |
 | `KAIROS_PROJECTS_DIR` | `~/.claude/projects` | Where it reads transcripts from |
 | `KAIROS_GATE` | `1` | `0` disables blocking and leaves reporting intact |
@@ -183,7 +182,7 @@ sourced if present.
 
 - It never writes your account's email address to disk. The account uuid, plan
   type and rate tier only.
-- It never blocks a prompt because something in kairos broke. Every uncertain
+- It never blocks a prompt because something in Kairos broke. Every uncertain
   path lets the prompt through. Being wrong about the budget is a nuisance;
   stopping your work because the meter failed is worse than having no meter.
 - It never runs `/login` for you. It will say when another account looks clear,
@@ -196,9 +195,9 @@ from transcript timestamps reproduces the reset times Claude's own refusals
 state, to the minute.
 
 Consumption counts `input_tokens + cache_creation_input_tokens + output_tokens`.
-Cache reads are excluded, which was measured rather than assumed: weighting
-them at zero fits the recorded refusals, and including them at any weight makes
-the error four times worse. A meter that counted them would be wrong by roughly
+Cache reads are excluded, and that came out of measurement. Weighting them at
+zero fits the recorded refusals, and including them at any weight makes the
+error four times worse. A meter that counted them would be wrong by roughly
 a factor of a hundred.
 
 ## Development
