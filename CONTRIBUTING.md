@@ -42,6 +42,37 @@ between an existence check and a read.
 Work on a topic branch and open a pull request. `main` requires the checks
 above, a linear history, and every review conversation resolved.
 
+## The screenshots in the README
+
+The images under `docs/screenshots/` are captures of real Claude Code sessions,
+not mock-ups. Each one exists as two files: a `.ansi` capture of the terminal,
+and the `.svg` rendered from it. Both are committed.
+
+Rendering needs nothing installed:
+
+```bash
+bash tools/screenshot.sh          # .ansi -> .svg
+bash tools/screenshot.sh --text   # what the captures show, as plain text
+bash tools/screenshot.sh --check  # what CI runs
+```
+
+Taking a new capture needs Claude Code and tmux, and it costs usage, because
+`/kairos` is a slash command and a slash command is a prompt:
+
+```bash
+bash tools/screenshot.sh --capture            # all three views
+bash tools/screenshot.sh --capture accounts   # just one, to fix one frame
+```
+
+Everything in frame comes from a fixture on a pinned clock, so the numbers are
+the same on every machine and no real account's usage is published. `KAIROS_NOW`
+exists for that and for nothing else.
+
+`--check` asks two separate questions, and the second is the one that matters:
+whether each image still matches its capture, and whether each capture still
+shows what the code prints today. A column that moves fails the second one, with
+instructions to re-capture. CI runs both and needs neither Claude nor a network.
+
 ## Commit messages
 
 Conventional commits, because `release-please` builds the changelog and the

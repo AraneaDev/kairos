@@ -8,7 +8,7 @@
 [![Release](https://img.shields.io/github/v/release/AraneaDev/kairos?label=release&include_prereleases)](https://github.com/AraneaDev/kairos/releases)
 [![Tool page](https://img.shields.io/badge/tool%20page-aranea--development.nl-0b7285)](https://aranea-development.nl/en/tools/kairos)
 [![CI](https://img.shields.io/github/actions/workflow/status/AraneaDev/kairos/ci.yml?label=CI)](https://github.com/AraneaDev/kairos/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/tests-217%20passing-2b8a3e)](tests/run.sh)
+[![Tests](https://img.shields.io/badge/tests-235%20passing-2b8a3e)](tests/run.sh)
 [![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-364fc7)](#requirements)
 [![License](https://img.shields.io/github/license/AraneaDev/kairos?label=license&color=yellow)](./LICENSE)
 [![Language](https://img.shields.io/github/languages/top/AraneaDev/kairos)](https://github.com/AraneaDev/kairos)
@@ -39,11 +39,18 @@ Kairos watches how much of the window you have spent, predicts what your next
 turn will cost, and stops the prompt before that turn takes you through the
 wall. When it stops you it asks what to do, and leaves the choice with you.
 
-```text
-kairos: predicted ~95k. 210k left before the optimistic wall,
-        resets in 2h41m.
+![The gate holding a prompt back](docs/screenshots/gate.svg)
 
-  Max 20x (…a8c8) block looks clear.
+The refusal is printed by a hook, before the prompt reaches the model. It costs
+no tokens, and nothing was sent:
+
+```text
+kairos: this turn would go through the wall
+────────────────────────────────────────────────────────
+  next     ~95k predicted
+  room     210k before the optimistic wall
+  resets   in 2h41m
+  clear    Max 20x (…a8c8) has room
 
   /kairos wait   hold, and tell me when the window resets
   /kairos go     send it anyway
@@ -60,15 +67,19 @@ writes.
 That reconstruction is exact for consumption and inexact for the ceiling, so
 Kairos reports the ceiling as a range and says how much evidence is behind it:
 
+![The /kairos report](docs/screenshots/report.svg)
+
 ```text
-Max 20x (…eeffff)
-  2.84M used · 53–72% of the wall · resets in 2h51m
-  band 3.91M to 5.29M, from 1 recorded wall
-  burn 1.33M/h over 2h08m of this block
-  by model:
-    claude-opus-5          2.10M
-    claude-sonnet-5        740k
-  3 turns recorded · next turn estimated at 510k
+Max 20x (…eea8c8)                        resets in 2h50m
+────────────────────────────────────────────────────────
+  used     2.84M · 49–66% of the wall
+  ceiling  4.25M to 5.75M, from 1 recorded wall
+  burn     1.31M/h over 2h10m of this block
+
+  claude-opus-5     █████████████░░░░░   2.10M   73%
+  claude-sonnet-5   █████░░░░░░░░░░░░░    740k   26%
+
+  3 turns · next turn ~610k
 ```
 
 The band narrows as evidence accumulates. One recorded refusal gives a wide
@@ -79,9 +90,11 @@ gated.** It measures, reports and predicts, and stays out of your way until it
 has observed a wall of that account's own:
 
 ```text
-Max 20x (…eeffff)
-  2.84M used · no ceiling recorded yet, so kairos will not interrupt
-  resets in 2h51m
+Max 20x (…eea8c8)                        resets in 2h50m
+────────────────────────────────────────────────────────
+  used     2.84M
+  ceiling  none recorded yet · kairos will not interrupt
+  burn     1.31M/h over 2h10m of this block
 ```
 
 This is deliberate. An earlier version seeded a plausible range from observed
@@ -102,14 +115,21 @@ Kairos keeps them apart. Everything it records is partitioned by account, a
 session follows the account that is actually paying even if you switch part way
 through, and `kairos accounts` shows where each one stands:
 
+![The accounts view](docs/screenshots/accounts.svg)
+
 ```text
-active Max 20x (…eea8c8)    2.84M used · 53–72% · resets in 2h55m · band from 1 wall
-       Pro (…94f311)           12k used · 41–56% · block clear · band from 3 walls
+  account              used   of wall  window
+────────────────────────────────────────────────────────
+▸ Max 20x (…eea8c8)   2.84M   49–66%   resets in 2h50m
+  Pro (…4f3110)         96k   26–31%   resets in 4h00m
+  Max 5x (…1c0de7)        0   no spend block clear
 ```
 
 A Max 5x and a Max 20x are told apart, because their ceilings differ by roughly
 four times and telling them apart is the point. An account Kairos has not seen
-refused yet says so in place of a percentage it cannot support.
+refused yet reads `no wall` in place of a percentage it cannot support, and one
+with nothing spent in the current block reads `no spend` rather than a measured
+zero.
 
 ## Requirements
 

@@ -24,7 +24,16 @@ kairos_read_explicit=${KAIROS_TURNS_READ+yes}
 # the headroom even when trims are being skipped.
 : "${KAIROS_TURNS_READ:=$((KAIROS_TURNS_KEEP * 10))}"
 
-kairos_now() { date +%s; }
+# KAIROS_NOW pins the clock. Nothing in normal use sets it: it exists so the
+# generated screenshots render the same durations on every machine, which is
+# what lets CI check them for drift instead of trusting them.
+kairos_now() {
+  if [ -n "${KAIROS_NOW:-}" ]; then
+    printf '%s\n' "$KAIROS_NOW"
+  else
+    date +%s
+  fi
+}
 
 kairos_have_jq() { command -v jq >/dev/null 2>&1; }
 

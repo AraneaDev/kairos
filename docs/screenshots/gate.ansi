@@ -1,0 +1,15 @@
+  [38;5;220m[bash "/root/kairos/hooks/scripts/user-prompt-submit.sh"]: kairos: this turn would go [39m
+  [38;5;220mthrough the wall[39m
+  [38;5;220m────────────────────────────────────────────────────────[39m
+  [38;5;220m  next     ~610k predicted[39m
+  [38;5;220m  room     300k before the optimistic wall[39m
+  [38;5;220m  resets   in 2h50m[39m
+  [38;5;220m  clear[39m [38;5;220m   Max 5x (…1c0de7) has room[39m
+
+  [38;5;220m [39m [38;5;220m/kairos[39m [38;5;220mwait[39m   [38;5;220mhold,[39m [38;5;220mand[39m [38;5;220mtell[39m [38;5;220mme[39m [38;5;220mwhen[39m [38;5;220mthe[39m [38;5;220mwindow[39m [38;5;220mresets[39m
+  [38;5;220m [39m [38;5;220m/kairos[39m [38;5;220mgo[39m     [38;5;220msend[39m [38;5;220mit[39m [38;5;220manyway[39m
+  [38;5;220m [39m [38;5;220m/kairos[39m [38;5;220mstop[39m   [38;5;220mdrop[39m [38;5;220mit[39m
+  [38;5;220m [39m [38;5;220m→[39m [38;5;220mto[39m [38;5;220mswitch,[39m [38;5;220mrun[39m [38;5;220m/login[39m [38;5;220myourself[39m
+
+
+  [38;5;220mOriginal[39m [38;5;220mprompt:[39m [38;5;220mfinish[39m [38;5;220mthe[39m [38;5;220mrefactor[39m [38;5;220mand[39m [38;5;220mrun[39m [38;5;220mthe[39m [38;5;220msuite[39m
