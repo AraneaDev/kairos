@@ -379,3 +379,7 @@ Versions and tags are not hand-edited. See [CONTRIBUTING.md](CONTRIBUTING.md).
 ## License
 
 MIT.
+
+---
+
+Built by [Aranea Development](https://aranea-development.nl).
