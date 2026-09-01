@@ -39,7 +39,7 @@ printf '%s\n' "$uuid" > "$KAIROS_HOME/sessions/$session"
 # stop.sh touches each claim as it makes it, so this age is measured from the
 # claim itself. Without that touch the claim would inherit the turn's start
 # time and a long turn's live claim could be swept while it was still in use.
-find "$(kairos_partition "$uuid")" -name 'turn.start.claimed.*' -mmin +60 \
+find "$(kairos_partition "$uuid")" -name 'turn.start.*.claimed.*' -mmin +60 \
   -exec rm -f {} + 2>/dev/null
 
 kairos_refresh "$uuid"

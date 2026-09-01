@@ -11,6 +11,10 @@
 : "${KAIROS_RESERVE:=3}"
 : "${KAIROS_GATE:=1}"
 : "${KAIROS_PREDICT_DEFAULT:=60000}"
+# Whether the read window was given explicitly, recorded before it is
+# defaulted, so a config file that changes the retention ceiling can move the
+# derived window with it without overriding a deliberate choice.
+kairos_read_explicit=${KAIROS_TURNS_READ+yes}
 : "${KAIROS_TURNS_KEEP:=200}"
 
 # The read window must always exceed the largest file the trim permits. If it
@@ -48,6 +52,11 @@ kairos_config_load() {
     # shellcheck source=/dev/null
     . "$KAIROS_HOME/config"
   fi
+  # The read window is derived from the retention ceiling, and the config file
+  # is sourced after that derivation ran. A config that raises the ceiling
+  # without this would leave the two equal, which is exactly the state that
+  # lets a busy session push a quiet one out of view.
+  [ -n "${kairos_read_explicit:-}" ] || KAIROS_TURNS_READ=$((KAIROS_TURNS_KEEP * 10))
   return 0
 }
 

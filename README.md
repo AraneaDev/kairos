@@ -5,7 +5,7 @@
 **Knows roughly where your usage limit is, and stops you before you walk into it.**
 
 [![CI](https://github.com/AraneaDev/kairos/actions/workflows/ci.yml/badge.svg)](https://github.com/AraneaDev/kairos/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/tests-192%20passing-2b8a3e)](tests/run.sh)
+[![Tests](https://img.shields.io/badge/tests-196%20passing-2b8a3e)](tests/run.sh)
 [![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-364fc7)](#requirements)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 
@@ -124,8 +124,8 @@ does anything. An already-running session will not pick it up.
 | `kairos report` | The window, the band, the burn rate, the model split, the next-turn estimate. This is the default, so `/kairos` alone does the same. |
 | `kairos accounts` | Every account kairos has seen, where each stands, and which is active. |
 | `kairos alias <name>` | Give the active account a name of your own, used in place of the derived label. |
-| `kairos wait` | Hold until the window resets, in a detached process that survives a closed terminal, then tell you. |
-| `kairos go` | Send the blocked prompt anyway. Spends itself once, then the gate re-arms. |
+| `kairos wait` | Hold until the window resets, in a detached process that survives a closed terminal, then ring the terminal that armed it. Set `KAIROS_NOTIFY_CMD` for anything louder. |
+| `kairos go` | Let the next prompt through, and print the one that was held so you can send it again. Spends itself once, then the gate re-arms. |
 | `kairos stop` | Drop the stashed prompt. |
 | `kairos calibrate` | Rescan every transcript for refusals kairos has not seen yet, and report what it found. |
 

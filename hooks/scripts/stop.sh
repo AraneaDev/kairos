@@ -24,7 +24,8 @@ fi
 
 uuid=$(kairos_active_account) || true
 part=$(kairos_partition "$uuid") || exit 0
-marker="$part/turn.start"
+session=$(kairos_safe_id "$session")
+marker="$part/turn.start.$session"
 [ -f "$marker" ] || exit 0
 
 # Claim the marker by renaming it. mv is atomic within a directory, so if two

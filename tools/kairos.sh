@@ -75,8 +75,15 @@ EOF
     kairos_report "$uuid"
     ;;
   go)
-    : > "$(kairos_partition "$uuid")/pass.once"
+    kairos_gopart=$(kairos_partition "$uuid")
+    : > "$kairos_gopart/pass.once"
     echo "kairos: the next prompt goes through, then the gate re-arms."
+    # kairos cannot resubmit a prompt on the user's behalf, so the held text is
+    # printed for them to send again rather than silently left on disk.
+    if [ -s "$kairos_gopart/stash" ]; then
+      echo "the prompt that was held back:"
+      sed 's/^/  /' "$kairos_gopart/stash"
+    fi
     ;;
   stop)
     rm -f "$(kairos_partition "$uuid")/stash"

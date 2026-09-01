@@ -28,7 +28,14 @@ kairos_waiter_fire() {
   kairos_wfpart=$(kairos_partition "$kairos_wfuuid") || return 1
   : > "$kairos_wfpart/waiter.fired"
   kairos_now > "$kairos_wfpart/waiter.wake"
-  printf '\007' >&2
+  # The detached waiter has its own stderr sent to /dev/null, so a bell written
+  # here would never be heard. Write to the terminal that armed the wait, when
+  # there is still one to write to.
+  if [ -w /dev/tty ]; then
+    printf '\007kairos: the usage window has reset.\n' > /dev/tty 2>/dev/null || true
+  else
+    printf '\007' >&2
+  fi
   if [ -n "${KAIROS_NOTIFY_CMD:-}" ]; then
     sh -c "$KAIROS_NOTIFY_CMD" >/dev/null 2>&1 || true
   fi

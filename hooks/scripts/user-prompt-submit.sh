@@ -63,7 +63,12 @@ fi
 part=$(kairos_partition "$uuid") || exit 0
 
 start_turn() {
-  printf '%s\t%s\n' "$(kairos_now)" "$session" > "$part/turn.start" 2>/dev/null || true
+  # Keyed by session, not just by account. Two terminals on one subscription
+  # would otherwise clobber each other's marker, and the damage is silent: one
+  # turn gets measured from the other's start time and the other is never
+  # recorded at all. The bias is systematically low, which is the direction
+  # that lets a wall arrive unwarned.
+  printf '%s\t%s\n' "$(kairos_now)" "$session" > "$part/turn.start.$session" 2>/dev/null || true
   exit 0
 }
 

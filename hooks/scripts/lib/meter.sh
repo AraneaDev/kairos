@@ -50,7 +50,15 @@ kairos_refresh() {
       printf '%s\t%s\n' "$kairos_f" "$kairos_size" >> "$kairos_rnew"
       continue
     fi
+    # Bounded by the size captured above, not read to whatever the current end
+    # of the file happens to be. Claude Code is often flushing a turn's final
+    # message while this runs, and anything appended between the size capture
+    # and this read would be ingested now and ingested again next time, because
+    # the cursor written below records the older size. A double counted row
+    # both blocks prompts that should pass and, if it lands inside a refusal
+    # window, permanently inflates that wall's recorded consumption.
     tail -c "+$((kairos_off + 1))" "$kairos_f" 2>/dev/null \
+      | head -c "$((kairos_size - kairos_off))" 2>/dev/null \
       | jq -R -r "$KAIROS_EXTRACT_JQ" 2>/dev/null \
       | awk -F'\t' -v a="$kairos_ruuid" 'NF == 4 { print $1 "\t" a "\t" $2 "\t" $3 "\t" $4 }' \
       >> "$kairos_rled"

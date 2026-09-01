@@ -225,16 +225,44 @@ kairos_refresh "$acct"
 is "a shrunken file is re-read from the start" "7" "$(wc -l < "$part/ledger.tsv" | tr -d ' ')"
 
 # Pruning keeps the window bounded no matter how long kairos has been installed.
-# Use kairos_now to make the test time-independent.
+#
+# The ledger is rebuilt from scratch here rather than appended to the rows the
+# fixture produced. Those carry fixed calendar timestamps, so once real time
+# passes them they fall outside the window too and the expected count silently
+# stops being reachable. A test that expires on a date is worse than no test.
 kairos_old_epoch=$(($(kairos_now) - KAIROS_LEDGER_WINDOW - 1000))
 kairos_recent_epoch=$(($(kairos_now) - 1000))
 {
   printf '%s\t%s\ts0\tm\t100\n' "$kairos_recent_epoch" "$acct"
   printf '%s\t%s\ts0\tm\t200\n' "$kairos_recent_epoch" "$acct"
   printf '%s\t%s\ts0\tm\t999\n' "$kairos_old_epoch" "$acct"
-} >> "$part/ledger.tsv"
+} > "$part/ledger.tsv"
 kairos_prune "$acct"
-is "pruning drops rows outside the window" "9" "$(wc -l < "$part/ledger.tsv" | tr -d ' ')"
+is "pruning drops rows outside the window" "2" "$(wc -l < "$part/ledger.tsv" | tr -d ' ')"
+
+# A line appended while a refresh is reading must not be counted twice. The
+# cursor records the size captured before the read, so an unbounded read would
+# ingest the new bytes now and ingest them again next time.
+racefile="$KAIROS_PROJECTS_DIR/proj/race.jsonl"
+: > "$racefile"
+printf '{"type":"assistant","sessionId":"r1","timestamp":"2026-08-31T10:00:00.000Z","message":{"model":"m","usage":{"input_tokens":1,"cache_creation_input_tokens":0,"cache_read_input_tokens":9,"output_tokens":1}}}\n' >> "$racefile"
+raceacct="zz-race"
+racepart2=$(kairos_partition "$raceacct")
+kairos_refresh "$raceacct"
+kairos_race_first=$(wc -l < "$racepart2/ledger.tsv" | tr -d ' ')
+printf '{"type":"assistant","sessionId":"r1","timestamp":"2026-08-31T10:01:00.000Z","message":{"model":"m","usage":{"input_tokens":1,"cache_creation_input_tokens":0,"cache_read_input_tokens":9,"output_tokens":1}}}\n' >> "$racefile"
+kairos_refresh "$raceacct"
+is "an appended line is counted once, not twice" "$((kairos_race_first + 1))" \
+  "$(wc -l < "$racepart2/ledger.tsv" | tr -d ' ')"
+rm -f "$racefile"
+
+# Two sessions on one account must not clobber each other's turn marker.
+twopart=$(kairos_partition "$acct")
+rm -f "$twopart"/turn.start.*
+printf '111\tsA\n' > "$twopart/turn.start.sA"
+printf '222\tsB\n' > "$twopart/turn.start.sB"
+is "two sessions keep separate turn markers" "111" "$(awk -F'\t' 'NR==1 {print $1}' "$twopart/turn.start.sA")"
+rm -f "$twopart"/turn.start.*
 
 # Test locking: lock can be taken, second attempt fails, re-acquired after unlock
 if kairos_try_lock "$part"; then pass "lock can be taken"; else fail "lock can be taken" "success" "failure"; fi
@@ -252,7 +280,9 @@ kairos_unlock "$part"
 # Test kairos_refresh with held lock
 mkdir "$part/lock"
 kairos_refresh "$acct"
-is "kairos_refresh returns 0 with held lock" "9" "$(wc -l < "$part/ledger.tsv" | tr -d ' ')"
+kairos_held_before=$(wc -l < "$part/ledger.tsv" | tr -d ' ')
+kairos_refresh "$acct"
+is "kairos_refresh writes nothing with held lock" "$kairos_held_before" "$(wc -l < "$part/ledger.tsv" | tr -d ' ')"
 kairos_unlock "$part"
 
 # Test kairos_prune with held lock
@@ -546,9 +576,16 @@ is "four turns in this session gives their p75" "300" "$(kairos_predict "$acct" 
 is "a cold session borrows the account history" "300" "$(kairos_predict "$acct" s-new)"
 
 # Only the last eight turns count, so an old spike stops dominating.
+# The earlier turns are 100, 200, 300 and 4000. Eight turns of 500 must push
+# all of them out of view, so the estimate becomes exactly 500. An unwindowed
+# p75 over all twelve also lands on 500, which is why the 4000 above matters:
+# widen the window and the answer moves.
 i=0
 while [ "$i" -lt 8 ]; do kairos_record_turn "$acct" s1 500; i=$((i + 1)); done
 is "only the last eight turns are used" "500" "$(kairos_predict "$acct" s1)"
+i=0
+while [ "$i" -lt 4 ]; do kairos_record_turn "$acct" s1 900; i=$((i + 1)); done
+is "and newer turns displace the oldest in the window" "900" "$(kairos_predict "$acct" s1)"
 
 # p75 leans high without being dragged to the top: one spike moves the estimate
 # off the median, but a single outlier does not become the estimate.
@@ -622,7 +659,7 @@ part=$(kairos_partition "$acct")
 # A turn that began at a recent time and spent 700 across three ledger rows, with a row
 # from another session and a row from before the turn that must not be counted.
 kairos_turn_start=$(kairos_now)
-printf '%s\ts9\n' "$kairos_turn_start" > "$part/turn.start"
+printf '%s\ts9\n' "$kairos_turn_start" > "$part/turn.start.s9"
 {
   printf '%s\t%s\ts9\tm\t9999\n' $((kairos_turn_start - 100)) "$acct"
   printf '%s\t%s\ts9\tm\t200\n' $((kairos_turn_start + 10)) "$acct"
@@ -633,7 +670,7 @@ printf '%s\ts9\n' "$kairos_turn_start" > "$part/turn.start"
 echo '{"session_id":"s9"}' | bash "$ROOT/hooks/scripts/stop.sh" >/dev/null 2>&1
 is "the turn is recorded" "1" "$(wc -l < "$part/turns.tsv" | tr -d ' ')"
 is "only this session's rows since the turn began are counted" "700" "$(awk -F'\t' 'NR==1 {print $3}' "$part/turns.tsv")"
-is "the marker is consumed" "no" "$([ -f "$part/turn.start" ] && echo yes || echo no)"
+is "the marker is consumed" "no" "$([ -f "$part/turn.start.s9" ] && echo yes || echo no)"
 
 echo '{"session_id":"s9"}' | bash "$ROOT/hooks/scripts/stop.sh" >/dev/null 2>&1
 is "a second stop with no marker records nothing" "1" "$(wc -l < "$part/turns.tsv" | tr -d ' ')"
@@ -646,7 +683,7 @@ is "stop always exits zero" "0" "$(echo '{}' | bash "$ROOT/hooks/scripts/stop.sh
 racepart=$(kairos_partition "$acct")
 : > "$racepart/turns.tsv"
 race_now=$(kairos_now)
-printf '%s\ts9\n' "$race_now" > "$racepart/turn.start"
+printf '%s\ts9\n' "$race_now" > "$racepart/turn.start.s9"
 printf '%s\t%s\ts9\tm\t500\n' "$((race_now + 5))" "$acct" > "$racepart/ledger.tsv"
 worker="$KAIROS_TESTDIR/stopworker.sh"
 printf '#!/usr/bin/env bash\necho %s | bash %s >/dev/null 2>&1\n' \
@@ -658,12 +695,12 @@ is "racing stop hooks record the turn once" "1" "$(wc -l < "$racepart/turns.tsv"
 # A malformed marker must record nothing rather than scoring a real turn as
 # free, which would poison the predictor with a value that never happened.
 : > "$racepart/turns.tsv"
-printf 'not-an-epoch\ts9\n' > "$racepart/turn.start"
+printf 'not-an-epoch\ts9\n' > "$racepart/turn.start.s9"
 printf '%s\t%s\ts9\tm\t500\n' "$(kairos_now)" "$acct" > "$racepart/ledger.tsv"
 echo '{"session_id":"s9"}' | bash "$ROOT/hooks/scripts/stop.sh" >/dev/null 2>&1
 is "a malformed marker records nothing, not a free turn" "0" \
   "$([ -s "$racepart/turns.tsv" ] && wc -l < "$racepart/turns.tsv" | tr -d ' ' || echo 0)"
-rm -f "$racepart/turn.start"
+rm -f "$racepart/turn.start.s9"
 teardown_env
 
 echo
@@ -683,13 +720,13 @@ is "nothing is printed when there is no stash" "" "$out"
 
 # An abandoned claim file is swept once it is old enough to be nobody's.
 sweeppart=$(kairos_partition "$acct")
-: > "$sweeppart/turn.start.claimed.999"
-touch -t 202601010000 "$sweeppart/turn.start.claimed.999" 2>/dev/null
-: > "$sweeppart/turn.start.claimed.888"
+: > "$sweeppart/turn.start.sS.claimed.999"
+touch -t 202601010000 "$sweeppart/turn.start.sS.claimed.999" 2>/dev/null
+: > "$sweeppart/turn.start.sS.claimed.888"
 echo '{"session_id":"sS"}' | bash "$ROOT/hooks/scripts/session-start.sh" >/dev/null 2>&1
-is "an old abandoned claim is swept" "no" "$([ -f "$sweeppart/turn.start.claimed.999" ] && echo yes || echo no)"
-is "a fresh claim is left alone" "yes" "$([ -f "$sweeppart/turn.start.claimed.888" ] && echo yes || echo no)"
-rm -f "$sweeppart/turn.start.claimed.888"
+is "an old abandoned claim is swept" "no" "$([ -f "$sweeppart/turn.start.sS.claimed.999" ] && echo yes || echo no)"
+is "a fresh claim is left alone" "yes" "$([ -f "$sweeppart/turn.start.sS.claimed.888" ] && echo yes || echo no)"
+rm -f "$sweeppart/turn.start.sS.claimed.888"
 
 is "session start exits zero with an unreadable claude.json" "0" \
   "$(rm -f "$KAIROS_CLAUDE_JSON"; echo '{"session_id":"sY"}' | bash "$ROOT/hooks/scripts/session-start.sh" >/dev/null 2>&1; echo $?)"
@@ -717,8 +754,8 @@ acct="aaaaaaaa-1111-2222-3333-444444444444"
 # A claim is aged from when it was claimed, not from when the turn began.
 agepart=$(kairos_partition "$acct")
 : > "$agepart/turns.tsv"
-printf '%s\ts9\n' "$(kairos_now)" > "$agepart/turn.start"
-touch -t 202601010000 "$agepart/turn.start"
+printf '%s\ts9\n' "$(kairos_now)" > "$agepart/turn.start.s9"
+touch -t 202601010000 "$agepart/turn.start.s9"
 printf '%s\t%s\ts9\tm\t500\n' "$(kairos_now)" "$acct" > "$agepart/ledger.tsv"
 echo '{"session_id":"s9"}' | bash "$ROOT/hooks/scripts/stop.sh" >/dev/null 2>&1
 is "a long turn still records rather than being swept" "1" \
@@ -886,7 +923,7 @@ now=$(kairos_now)
 printf '%s\t%s\tsZ\tm\t99000000\n' "$((now - 60))" "$acct" > "$part/ledger.tsv"
 printf '%s' "$prompt" | bash "$ROOT/hooks/scripts/user-prompt-submit.sh" >/dev/null 2>&1
 is "an uncalibrated account is never gated" "0" "$?"
-rm -f "$part/turn.start"
+rm -f "$part/turn.start.sZ"
 
 # From here the account has one recorded wall at 5.0M, so a band exists.
 printf '%s\t5000000\t%s\n' "$((now - 90000))" "$((now - 86400))" > "$part/walls.tsv"
@@ -896,11 +933,11 @@ printf '%s\t%s\tsZ\tm\t1000\n' "$((now - 60))" "$acct" > "$part/ledger.tsv"
 out=$(printf '%s' "$prompt" | bash "$ROOT/hooks/scripts/user-prompt-submit.sh" 2>&1)
 is "a prompt with room passes" "0" "$?"
 is "and prints nothing at all" "" "$out"
-is "and marks the turn as started" "yes" "$([ -f "$part/turn.start" ] && echo yes || echo no)"
-is "the marker names the session" "sZ" "$(awk -F'\t' 'NR==1 {print $2}' "$part/turn.start")"
+is "and marks the turn as started" "yes" "$([ -f "$part/turn.start.sZ" ] && echo yes || echo no)"
+is "the marker names the session" "sZ" "$(awk -F'\t' 'NR==1 {print $2}' "$part/turn.start.sZ")"
 
 # Near the wall: the prompt is refused and the text is kept.
-rm -f "$part/turn.start"
+rm -f "$part/turn.start.sZ"
 printf '%s\t%s\tsZ\tm\t5690000\n' "$((now - 60))" "$acct" > "$part/ledger.tsv"
 out=$(printf '%s' "$prompt" | bash "$ROOT/hooks/scripts/user-prompt-submit.sh" 2>&1)
 rc=$?
@@ -910,7 +947,7 @@ contains "the refusal offers to wait" "/kairos wait" "$out"
 contains "the refusal offers to override" "/kairos go" "$out"
 contains "the refusal offers to drop it" "/kairos stop" "$out"
 is "the prompt text is stashed" "do the thing" "$(cat "$part/stash" 2>/dev/null)"
-is "no turn is started when refused" "no" "$([ -f "$part/turn.start" ] && echo yes || echo no)"
+is "no turn is started when refused" "no" "$([ -f "$part/turn.start.sZ" ] && echo yes || echo no)"
 
 # go overrides exactly once.
 bash "$ROOT/tools/kairos.sh" go >/dev/null 2>&1
@@ -922,6 +959,18 @@ is "and the gate re-arms behind it" "2" "$?"
 # stop clears the stash.
 bash "$ROOT/tools/kairos.sh" stop >/dev/null 2>&1
 is "stop drops the stashed prompt" "no" "$([ -f "$part/stash" ] && echo yes || echo no)"
+
+# The gate must use the optimistic edge of the band. With one wall of 5.0M the
+# band is 4.25M to 5.75M, so 4.5M spent leaves 1.25M against the high edge and
+# nothing against the low one. Gating on the low edge would refuse here, which
+# is the "interrupt wrongly for a month" behaviour the design rejects, and no
+# other assertion separates the two edges.
+printf '%s\t%s\tsZ\tm\t4500000\n' "$(kairos_now)" "$acct" > "$part/ledger.tsv"
+rm -f "$part/turn.start.sZ" "$part/pass.once"
+printf '%s' "$prompt" | bash "$ROOT/hooks/scripts/user-prompt-submit.sh" >/dev/null 2>&1
+is "the gate measures against the optimistic edge" "0" "$?"
+rm -f "$part/turn.start.sZ"
+
 
 # A /login part way through a session moves the budget being spent, so the
 # gate must follow it. Reading the stale binding would weigh one subscription's
