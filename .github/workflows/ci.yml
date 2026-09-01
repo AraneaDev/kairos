@@ -1,0 +1,85 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install jq
+        run: |
+          if command -v jq >/dev/null 2>&1; then
+            echo "jq $(jq --version) already present"
+          elif [ "$RUNNER_OS" = "macOS" ]; then
+            brew install jq
+          elif [ "$RUNNER_OS" = "Windows" ]; then
+            choco install jq -y
+          else
+            sudo apt-get update && sudo apt-get install -y jq
+          fi
+      - name: Run tests
+        run: bash tests/run.sh
+      - name: Run tests under bash 3.2
+        if: runner.os == 'macOS'
+        run: /bin/bash tests/run.sh
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Syntax check
+        run: |
+          for f in hooks/scripts/*.sh hooks/scripts/lib/*.sh tools/*.sh tests/run.sh; do
+            [ -f "$f" ] || continue
+            bash -n "$f"
+          done
+      - name: shellcheck
+        run: |
+          shellcheck -S style -e SC1091 \
+            --enable=deprecate-which \
+            --enable=avoid-nullary-conditions \
+            --enable=quote-safe-variables \
+            hooks/scripts/*.sh hooks/scripts/lib/*.sh tools/*.sh tests/run.sh
+
+  manifests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install jq
+        run: command -v jq >/dev/null || (sudo apt-get update && sudo apt-get install -y jq)
+      - name: Validate JSON
+        run: |
+          for f in .claude-plugin/plugin.json hooks/hooks.json; do
+            jq -e . "$f" > /dev/null && echo "$f ok"
+          done
+      - name: Hook commands point at files that exist
+        run: |
+          status=0
+          while read -r script; do
+            path="${script#\$CLAUDE_PLUGIN_ROOT/}"
+            if [ -f "$path" ]; then echo "ok   $path"; else echo "MISSING $path"; status=1; fi
+          done < <(jq -r '.hooks[][].hooks[].command | scan("\\$CLAUDE_PLUGIN_ROOT/[^\"]+")' hooks/hooks.json)
+          exit $status
+
+  docs:
+    # The README goes stale silently: a setting gets added and never written
+    # down, a count stops matching. All cheap to check.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install jq
+        run: command -v jq >/dev/null || (sudo apt-get update && sudo apt-get install -y jq)
+      - name: Check the README against the code
+        run: bash tools/check-docs.sh

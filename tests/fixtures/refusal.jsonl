@@ -1,0 +1,3 @@
+{"type":"assistant","sessionId":"s1","timestamp":"2026-08-31T10:28:17.593Z","isApiErrorMessage":true,"quotaLimits":{"status":"rejected","resetsAt":1788175200,"rateLimitType":"five_hour","overageStatus":"rejected","isUsingOverage":false}}
+{"type":"assistant","sessionId":"s1","timestamp":"2026-08-31T10:28:52.100Z","quotaLimits":{"status":"rejected","resetsAt":1788175200,"rateLimitType":"five_hour","overageStatus":"rejected","isUsingOverage":false}}
+{"type":"assistant","sessionId":"s1","timestamp":"2026-08-20T09:00:00.000Z","quotaLimits":{"status":"rejected","resetsAt":1787220000,"rateLimitType":"weekly","overageStatus":"rejected","isUsingOverage":false}}

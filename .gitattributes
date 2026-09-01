@@ -1,0 +1,14 @@
+# Git for Windows converts line endings on checkout by default, which turns
+# every shell script and test fixture into CRLF. A carriage return that reaches
+# a numeric field becomes an arithmetic error, and one that reaches a comparison
+# silently never matches, so the whole tree is pinned to LF.
+* text=auto eol=lf
+
+*.sh text eol=lf
+*.jsonl text eol=lf
+*.tsv text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.yml text eol=lf
+
+assets/* binary
