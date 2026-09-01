@@ -49,29 +49,46 @@ kairos_meta_get() {
 kairos_meta_set() {
   kairos_mdir=$1; kairos_mkey=$2; kairos_mval=$3
   kairos_ensure_dir "$kairos_mdir" || return 1
+
+  # The whole read, update and replace runs under a lock of its own.
+  #
+  # Two writers without it read the same file, each append their key, and the
+  # second replacement drops the first one's. Worse, the existence check and
+  # the read are separate, so a writer that observes the file mid-replacement
+  # would treat it as empty and write a single-key meta, discarding org_type,
+  # rate_tier and first_seen. Losing first_seen changes which recorded refusals
+  # are trusted to calibrate the account, which is not a cosmetic loss.
+  #
+  # A separate lock name from the meter's, so a refresh in progress never
+  # blocks a metadata write or the other way round.
+  kairos_wait_lock "$kairos_mdir" meta.lock || return 1
+
   kairos_mtmp="$kairos_mdir/meta.tmp.$$"
-  # Copying the existing keys is a read that races with another writer's
-  # replacement of the same file. On Windows replacing a file is not atomic, so
-  # meta can vanish for an instant and the read fails. Retry rather than write a
-  # meta missing every key the read did not get, and treat a file that is still
-  # gone on the last attempt as an empty one.
-  kairos_mtries=0
-  while :; do
-    if [ ! -f "$kairos_mdir/meta" ]; then
-      : > "$kairos_mtmp" || { rm -f "$kairos_mtmp"; return 1; }
-      break
+  if [ -f "$kairos_mdir/meta" ]; then
+    if ! awk -F'\t' -v k="$kairos_mkey" '$1 != k' "$kairos_mdir/meta" > "$kairos_mtmp" 2>/dev/null; then
+      rm -f "$kairos_mtmp"
+      kairos_unlock "$kairos_mdir" meta.lock
+      return 1
     fi
-    if awk -F'\t' -v k="$kairos_mkey" '$1 != k' "$kairos_mdir/meta" > "$kairos_mtmp" 2>/dev/null; then
-      break
+  else
+    if ! : > "$kairos_mtmp"; then
+      rm -f "$kairos_mtmp"
+      kairos_unlock "$kairos_mdir" meta.lock
+      return 1
     fi
-    kairos_mtries=$((kairos_mtries + 1))
-    if [ "$kairos_mtries" -ge 5 ]; then
-      : > "$kairos_mtmp" || { rm -f "$kairos_mtmp"; return 1; }
-      break
-    fi
-  done
-  printf '%s\t%s\n' "$kairos_mkey" "$kairos_mval" >> "$kairos_mtmp" || { rm -f "$kairos_mtmp"; return 1; }
-  mv "$kairos_mtmp" "$kairos_mdir/meta" || { rm -f "$kairos_mtmp"; return 1; }
+  fi
+  if ! printf '%s\t%s\n' "$kairos_mkey" "$kairos_mval" >> "$kairos_mtmp"; then
+    rm -f "$kairos_mtmp"
+    kairos_unlock "$kairos_mdir" meta.lock
+    return 1
+  fi
+  if ! mv "$kairos_mtmp" "$kairos_mdir/meta" 2>/dev/null; then
+    rm -f "$kairos_mtmp"
+    kairos_unlock "$kairos_mdir" meta.lock
+    return 1
+  fi
+  kairos_unlock "$kairos_mdir" meta.lock
+  return 0
 }
 
 # Records what this account is. The email address is deliberately not among the

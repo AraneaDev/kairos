@@ -197,6 +197,32 @@ is "concurrent writes preserve pre-seeded keys" "seedvalue" "$(kairos_meta_get "
 kairos_race_malformed=$(awk '!/^[^\t]+\t.+$/' "$kairos_race_part/meta" | wc -l | tr -d ' ')
 is "all meta entries are well-formed key<TAB>value pairs" "0" "$kairos_race_malformed"
 
+# Concurrent writers must not lose each other's keys. Each reads the file,
+# appends its own key and replaces the whole thing, so without serialisation
+# the last replacement silently drops everything the others added. Losing
+# first_seen would change which recorded refusals are trusted to calibrate the
+# account, so this is not a cosmetic loss.
+lostpart=$(kairos_partition "kkkk-lost")
+metaworker="$KAIROS_TESTDIR/metaworker.sh"
+# shellcheck disable=SC2016  # the worker's own positional parameters, not ours
+{
+  printf '#!/usr/bin/env bash\n'
+  printf 'export KAIROS_HOME="$1"\n'
+  printf '. "%s/common.sh"\n' "$LIB"
+  printf '. "%s/account.sh"\n' "$LIB"
+  printf 'kairos_meta_set "$2" "$3" "$4"\n'
+} > "$metaworker"
+printf 'org_type\tclaude_max\nfirst_seen\t12345\n' > "$lostpart/meta"
+metanoise=$( { for k in a b c d; do
+    bash "$metaworker" "$KAIROS_HOME" "$lostpart" "$k" "v$k" &
+  done; wait; } 2>&1 )
+metakept=yes
+for want in org_type first_seen a b c d; do
+  grep -q "^$want	" "$lostpart/meta" || metakept=no
+done
+is "concurrent writers keep every key" "yes" "$metakept"
+is "and write nothing to stderr" "" "$metanoise"
+
 # The fallback path: no readable claude.json at all.
 rm -f "$KAIROS_CLAUDE_JSON"
 is "falls back to a named unknown account" "unknown" "$(kairos_active_account || true)"

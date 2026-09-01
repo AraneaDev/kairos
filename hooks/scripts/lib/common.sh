@@ -74,49 +74,75 @@ kairos_lock_is_stale() {
 # returns 0, because a skipped refresh costs nothing (the next prompt refreshes
 # anyway) while a blocked prompt costs the user their turn.
 kairos_try_lock() {
-  kairos_lkdir="$1/lock"
+  kairos_lkdir="$1/${2:-lock}"
   if mkdir "$kairos_lkdir" 2>/dev/null; then
     printf '%s\n' "$$" > "$kairos_lkdir/owner" 2>/dev/null
     return 0
   fi
+
   # Note which lock we are about to judge, before judging it.
   kairos_lkprev=$(cat "$kairos_lkdir/owner" 2>/dev/null)
-  if kairos_lock_is_stale "$kairos_lkdir"; then
-    # Claim by renaming rather than deleting. mv is atomic, so only one
-    # claimant can take a given lock away.
-    #
-    # Renaming alone is not enough. Between judging the lock stale and moving
-    # it, another process can complete its own takeover and create a fresh
-    # lock, and the move would then steal that one, leaving two processes both
-    # believing they hold it. Measured at two winners in ten five-way races.
-    # So check that what we moved is the lock we judged, and put it back if it
-    # is not.
-    kairos_lkstale="$1/lock.stale.$$"
-    if mv "$kairos_lkdir" "$kairos_lkstale" 2>/dev/null; then
-      kairos_lkgot=$(cat "$kairos_lkstale/owner" 2>/dev/null)
-      if [ "$kairos_lkgot" != "$kairos_lkprev" ]; then
-        mv "$kairos_lkstale" "$kairos_lkdir" 2>/dev/null || rm -rf "$kairos_lkstale" 2>/dev/null
-        return 1
-      fi
-      rm -rf "$kairos_lkstale" 2>/dev/null
-      if mkdir "$kairos_lkdir" 2>/dev/null; then
-        printf '%s\n' "$$" > "$kairos_lkdir/owner" 2>/dev/null
-        return 0
-      fi
-    fi
+  kairos_lock_is_stale "$kairos_lkdir" || return 1
+
+  # Takeovers are serialised through a separate claim directory, and the lock
+  # itself is never moved.
+  #
+  # An earlier version claimed by renaming the lock aside and renaming it back
+  # if it turned out to be someone's fresh lock. Renaming back into a path that
+  # now exists nests the directory inside it instead of restoring it, and both
+  # processes then believe they hold the lock. Moving a lock you might not own
+  # is the mistake; this never moves one.
+  kairos_lkclaim="$kairos_lkdir.claim"
+  if ! mkdir "$kairos_lkclaim" 2>/dev/null; then
+    kairos_lock_is_stale "$kairos_lkclaim" || return 1
+    rm -rf "$kairos_lkclaim" 2>/dev/null
+    mkdir "$kairos_lkclaim" 2>/dev/null || return 1
   fi
+
+  # With the claim held, re-read the owner. A change means another claimant
+  # took over between our judgement and now, so theirs is a fresh lock and not
+  # ours to remove.
+  kairos_lknow=$(cat "$kairos_lkdir/owner" 2>/dev/null)
+  if [ "$kairos_lknow" != "$kairos_lkprev" ]; then
+    rm -rf "$kairos_lkclaim" 2>/dev/null
+    return 1
+  fi
+
+  rm -rf "$kairos_lkdir" 2>/dev/null
+  if mkdir "$kairos_lkdir" 2>/dev/null; then
+    printf '%s\n' "$$" > "$kairos_lkdir/owner" 2>/dev/null
+    rm -rf "$kairos_lkclaim" 2>/dev/null
+    return 0
+  fi
+  rm -rf "$kairos_lkclaim" 2>/dev/null
   return 1
 }
 
+# Waits for a lock rather than giving up, for the few callers that must not
+# skip their work. Bounded, because a hook that never returns is worse than a
+# meter that misses one update.
+kairos_wait_lock() {
+  kairos_wltries=0
+  while ! kairos_try_lock "$1" "${2:-lock}"; do
+    kairos_wltries=$((kairos_wltries + 1))
+    if [ "$kairos_wltries" -ge 100 ]; then
+      return 1
+    fi
+    sleep 0.05 2>/dev/null || sleep 1
+  done
+  return 0
+}
+
 kairos_unlock() {
+  kairos_uldir="$1/${2:-lock}"
   # Only the owner releases. Without this, a process whose stale lock was taken
   # over by someone else would go on to delete the new owner's lock when it
   # finished.
-  kairos_ulowner=$(cat "${1}/lock/owner" 2>/dev/null)
+  kairos_ulowner=$(cat "$kairos_uldir/owner" 2>/dev/null)
   if [ -n "$kairos_ulowner" ] && [ "$kairos_ulowner" != "$$" ]; then
     return 0
   fi
-  rm -rf "${1}/lock" 2>/dev/null
+  rm -rf "$kairos_uldir" 2>/dev/null
   return 0
 }
 
