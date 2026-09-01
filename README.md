@@ -2,16 +2,30 @@
 
 # kairos
 
-**Knows roughly where your usage limit is, and stops you before you walk into it.**
+**The right moment, caught before it passes.**
+**kairos stops you before the usage limit does.**
 
-[![CI](https://github.com/AraneaDev/kairos/actions/workflows/ci.yml/badge.svg)](https://github.com/AraneaDev/kairos/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/AraneaDev/kairos?label=release&include_prereleases)](https://github.com/AraneaDev/kairos/releases)
+[![Tool page](https://img.shields.io/badge/tool%20page-aranea--development.nl-0b7285)](https://aranea-development.nl/en/tools/kairos)
+[![CI](https://img.shields.io/github/actions/workflow/status/AraneaDev/kairos/ci.yml?label=CI)](https://github.com/AraneaDev/kairos/actions/workflows/ci.yml)
 [![Tests](https://img.shields.io/badge/tests-217%20passing-2b8a3e)](tests/run.sh)
 [![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-364fc7)](#requirements)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
+[![License](https://img.shields.io/github/license/AraneaDev/kairos?label=license&color=yellow)](./LICENSE)
+[![Language](https://img.shields.io/github/languages/top/AraneaDev/kairos)](https://github.com/AraneaDev/kairos)
+[![Last commit](https://img.shields.io/github/last-commit/AraneaDev/kairos?label=last%20commit)](https://github.com/AraneaDev/kairos/commits/main)
+[![Conventional Commits](https://img.shields.io/badge/commits-conventional-fe5196?logo=conventionalcommits&logoColor=white)](https://www.conventionalcommits.org/)
+[![Status](https://img.shields.io/badge/status-pre--release-orange)](#install)
 
 </div>
 
----
+> **Kairos** (καιρός) is the ancient Greek word for the right moment, as opposed
+> to *chronos*, which is time merely passing. Personified, he is a young god with
+> a long lock of hair over his forehead and nothing at all at the back of his
+> head: you can catch him as he comes toward you, and never once he has gone by.
+
+That is the whole problem this solves. A usage limit is only worth knowing about
+before you reach it. Afterwards there is nothing left to take hold of, and the
+five hours you wait are five hours whether you understood them or not.
 
 Claude Code gives no warning before the five-hour usage limit. Work stops
 mid-task, at a moment chosen by the limit rather than by you, and the only
@@ -89,12 +103,14 @@ session follows the account that is actually paying even if you switch part way
 through, and `kairos accounts` shows where each one stands:
 
 ```text
-active Max 20x (…a8c8)      2.84M used · 53–72% · resets in 2h51m · band from 1 wall(s)
-       Pro (…f94311)          12k used · 0–0% · block clear · band from 3 wall(s)
+active Max 20x (…eea8c8)    2.84M used · 53–72% · resets in 2h55m · band from 1 wall
+       Pro (…94f311)           12k used · 41–56% · block clear · band from 3 walls
 ```
 
-A Max 5x and a Max 20x are told apart, because their ceilings differ and
-telling them apart is the point.
+A Max 5x and a Max 20x are told apart, because their ceilings differ by roughly
+four times and telling them apart is the point. An account kairos has not seen
+refused yet says so in place of a percentage, rather than showing a figure it
+cannot support.
 
 ## Requirements
 
