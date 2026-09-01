@@ -76,18 +76,46 @@ kairos_lock_is_stale() {
 kairos_try_lock() {
   kairos_lkdir="$1/lock"
   if mkdir "$kairos_lkdir" 2>/dev/null; then
+    printf '%s\n' "$$" > "$kairos_lkdir/owner" 2>/dev/null
     return 0
   fi
+  # Note which lock we are about to judge, before judging it.
+  kairos_lkprev=$(cat "$kairos_lkdir/owner" 2>/dev/null)
   if kairos_lock_is_stale "$kairos_lkdir"; then
-    rm -rf "$kairos_lkdir" 2>/dev/null
-    if mkdir "$kairos_lkdir" 2>/dev/null; then
-      return 0
+    # Claim by renaming rather than deleting. mv is atomic, so only one
+    # claimant can take a given lock away.
+    #
+    # Renaming alone is not enough. Between judging the lock stale and moving
+    # it, another process can complete its own takeover and create a fresh
+    # lock, and the move would then steal that one, leaving two processes both
+    # believing they hold it. Measured at two winners in ten five-way races.
+    # So check that what we moved is the lock we judged, and put it back if it
+    # is not.
+    kairos_lkstale="$1/lock.stale.$$"
+    if mv "$kairos_lkdir" "$kairos_lkstale" 2>/dev/null; then
+      kairos_lkgot=$(cat "$kairos_lkstale/owner" 2>/dev/null)
+      if [ "$kairos_lkgot" != "$kairos_lkprev" ]; then
+        mv "$kairos_lkstale" "$kairos_lkdir" 2>/dev/null || rm -rf "$kairos_lkstale" 2>/dev/null
+        return 1
+      fi
+      rm -rf "$kairos_lkstale" 2>/dev/null
+      if mkdir "$kairos_lkdir" 2>/dev/null; then
+        printf '%s\n' "$$" > "$kairos_lkdir/owner" 2>/dev/null
+        return 0
+      fi
     fi
   fi
   return 1
 }
 
 kairos_unlock() {
+  # Only the owner releases. Without this, a process whose stale lock was taken
+  # over by someone else would go on to delete the new owner's lock when it
+  # finished.
+  kairos_ulowner=$(cat "${1}/lock/owner" 2>/dev/null)
+  if [ -n "$kairos_ulowner" ] && [ "$kairos_ulowner" != "$$" ]; then
+    return 0
+  fi
   rm -rf "${1}/lock" 2>/dev/null
   return 0
 }
@@ -100,9 +128,20 @@ kairos_unlock() {
 # bind, quietly, to the wrong session, and binding the wrong session to the
 # wrong account is the exact failure this whole partition scheme exists to
 # prevent.
+# Prints a usable name always, so a path built from it is never malformed, and
+# signals through its exit status whether the id was genuinely valid. Callers
+# that write something keyed by the id check that status: every rejected id
+# maps to the same "unknown" name, so writing under it would let two unrelated
+# sessions overwrite each other's binding.
 kairos_safe_id() {
   case "${1:-}" in
-    ''|.|..|*[!A-Za-z0-9._-]*) printf 'unknown\n' ;;
-    *) printf '%s\n' "$1" ;;
+    ''|.|..|*[!A-Za-z0-9._-]*)
+      printf 'unknown\n'
+      return 1
+      ;;
+    *)
+      printf '%s\n' "$1"
+      return 0
+      ;;
   esac
 }

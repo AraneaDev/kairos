@@ -117,12 +117,22 @@ EOF
     else
       kairos_awhen="block clear"
     fi
-    printf '%s%-18s %8s used · %s–%s%% · %s · band from %s wall(s)\n' \
-      "$kairos_amark" "$(kairos_account_label "$kairos_auuid")" \
-      "$(kairos_human "$kairos_aused")" \
-      "$(kairos_pct "$kairos_aused" "$kairos_ahigh")" \
-      "$(kairos_pct "$kairos_aused" "$kairos_alow")" \
-      "$kairos_awhen" "$kairos_aconf"
+    # An account with no recorded wall has no fraction to show. Printing zero
+    # percent here would read as "nothing spent" beside a real used figure,
+    # which is the same untruth the report and the summary already avoid.
+    if [ "${kairos_aconf:-0}" -eq 0 ]; then
+      printf '%s%-18s %8s used · no ceiling recorded yet · %s\n' \
+        "$kairos_amark" "$(kairos_account_label "$kairos_auuid")" \
+        "$(kairos_human "$kairos_aused")" "$kairos_awhen"
+    else
+      if [ "$kairos_aconf" -eq 1 ]; then kairos_aword="wall"; else kairos_aword="walls"; fi
+      printf '%s%-18s %8s used · %s–%s%% · %s · band from %s %s\n' \
+        "$kairos_amark" "$(kairos_account_label "$kairos_auuid")" \
+        "$(kairos_human "$kairos_aused")" \
+        "$(kairos_pct "$kairos_aused" "$kairos_ahigh")" \
+        "$(kairos_pct "$kairos_aused" "$kairos_alow")" \
+        "$kairos_awhen" "$kairos_aconf" "$kairos_aword"
+    fi
   done
 }
 

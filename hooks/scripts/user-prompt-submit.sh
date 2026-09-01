@@ -33,7 +33,11 @@ case "$prompt" in
   /kairos*|kairos\ *) exit 0 ;;
 esac
 
-session=$(kairos_safe_id "$session")
+if session=$(kairos_safe_id "$session"); then
+  kairos_session_valid=yes
+else
+  kairos_session_valid=no
+fi
 
 bound=""
 if [ -f "$KAIROS_HOME/sessions/$session" ]; then
@@ -53,7 +57,7 @@ fi
 if uuid=$(kairos_active_account); then
   if [ "$uuid" != "$bound" ]; then
     kairos_account_record "$uuid"
-    if kairos_ensure_dir "$KAIROS_HOME/sessions"; then
+    if [ "$kairos_session_valid" = "yes" ] && kairos_ensure_dir "$KAIROS_HOME/sessions"; then
       printf '%s\n' "$uuid" > "$KAIROS_HOME/sessions/$session" 2>/dev/null || true
     fi
   fi

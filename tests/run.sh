@@ -44,7 +44,17 @@ refutes() {
 # A test environment is a temp tree standing in for the three real paths the
 # plugin reads. Exported, because hook entrypoints run as separate processes.
 setup_env() {
-  KAIROS_TESTDIR=$(mktemp -d "${TMPDIR:-/tmp}/kairos-test.XXXXXX")
+  # Without this check a failed mktemp leaves KAIROS_TESTDIR empty and every
+  # path below resolves against the filesystem root, so the suite would start
+  # writing where the real state lives.
+  KAIROS_TESTDIR=$(mktemp -d "${TMPDIR:-/tmp}/kairos-test.XXXXXX") || {
+    echo "cannot create a temp directory, refusing to run" >&2
+    exit 1
+  }
+  if [ -z "$KAIROS_TESTDIR" ] || [ ! -d "$KAIROS_TESTDIR" ]; then
+    echo "temp directory is not usable, refusing to run" >&2
+    exit 1
+  fi
   export KAIROS_TESTDIR
   export KAIROS_HOME="$KAIROS_TESTDIR/state"
   export KAIROS_CLAUDE_JSON="$KAIROS_TESTDIR/claude.json"
@@ -775,7 +785,10 @@ travpart="$KAIROS_HOME/sessions"
 : > "$KAIROS_HOME/canary"
 echo '{"session_id":"../canary"}' | bash "$ROOT/hooks/scripts/session-start.sh" >/dev/null 2>&1
 is "a traversing session id cannot clobber a state file" "" "$(cat "$KAIROS_HOME/canary")"
-is "and is bound under a safe name instead" "yes" "$([ -f "$travpart/unknown" ] && echo yes || echo no)"
+# And it gets no binding at all. Every rejected id collapses to the same safe
+# name, so writing one would let two unrelated sessions overwrite each other's
+# account. The session still runs, it just has no binding of its own.
+is "and no shared binding is written for it" "no" "$([ -f "$travpart/unknown" ] && echo yes || echo no)"
 rm -f "$KAIROS_HOME/canary"
 
 teardown_env
@@ -940,6 +953,42 @@ is "an account still inside its block is not offered" "" "$(kairos_other_clear_a
 ghost=$(kairos_partition "hhhh-neverseen")
 kairos_meta_set "$ghost" org_type claude_pro
 is "an unmetered account is never advertised as clear" "" "$(kairos_other_clear_account "$acct")"
+
+# A lock is released only by the process that took it. Without that, a process
+# whose stale lock was taken over would delete the new owner's lock when it
+# finished, leaving two processes both believing they hold it.
+lockpart=$(kairos_partition "iiii-locks")
+kairos_try_lock "$lockpart"
+printf '999999\n' > "$lockpart/lock/owner"
+kairos_unlock "$lockpart"
+is "a lock held by another process is not released" "yes" \
+  "$([ -d "$lockpart/lock" ] && echo yes || echo no)"
+printf '%s\n' "$$" > "$lockpart/lock/owner"
+kairos_unlock "$lockpart"
+is "and the owner can release its own" "no" "$([ -d "$lockpart/lock" ] && echo yes || echo no)"
+
+# A stale lock is taken over by exactly one process. That is deliberately not
+# asserted here. A race assertion strong enough to catch the bug, five
+# claimants over fifteen rounds, also failed three runs in eight while the fix
+# was in place, because the timing shifts under whatever else the suite is
+# doing. A flaky assertion in CI is worse than none: it trains people to rerun
+# rather than read.
+#
+# The fix is verified instead by a standalone measurement, forty five-way
+# races: exactly one winner every time, never zero and never two. Reverting the
+# identity check in kairos_try_lock and repeating that measurement reproduces
+# the two-winner state it prevents.
+
+# The accounts view must not show a percentage for an account with no wall,
+# for the same reason the report and the summary do not.
+viewpart=$(kairos_partition "jjjj-view")
+printf '%s\tjjjj-view\ts1\tm\t900000\n' "$(kairos_now)" > "$viewpart/ledger.tsv"
+viewout=$(kairos_accounts_report "jjjj-view")
+contains "the accounts view says when there is no ceiling" "no ceiling recorded yet" "$viewout"
+case "$viewout" in
+  *"jjjj"*"%"*) fail "the accounts view shows no percentage without a wall" "no percentage" "$viewout" ;;
+  *) pass "the accounts view shows no percentage without a wall" ;;
+esac
 
 bash "$ROOT/tools/kairos.sh" alias "work laptop" >/dev/null 2>&1
 is "the alias is stored" "work laptop" "$(kairos_meta_get "$KAIROS_HOME/accounts/$acct" alias)"

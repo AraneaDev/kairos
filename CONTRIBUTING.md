@@ -22,8 +22,9 @@ shellcheck -S style -e SC1091 \
   hooks/scripts/*.sh hooks/scripts/lib/*.sh tools/*.sh tests/run.sh
 ```
 
-CI runs all three on Linux, macOS and Windows, and additionally runs the suite
-under bash 3.2 on macOS, which is what macOS still ships as `/bin/bash`.
+CI runs the suite on Linux, macOS and Windows, and again under bash 3.2 on
+macOS, which is what macOS still ships as `/bin/bash`. ShellCheck and the
+documentation check run on Ubuntu only.
 
 ## Rules that are enforced rather than asked for
 

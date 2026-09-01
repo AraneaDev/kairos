@@ -20,7 +20,10 @@ kairos_active_account() {
 }
 
 kairos_partition() {
-  kairos_part="$KAIROS_HOME/accounts/${1:-unknown}"
+  # The account uuid is read from a file on disk, so it reaches a path the same
+  # way a session id does and gets the same treatment. One slash in it would
+  # put an account's whole state outside the accounts directory.
+  kairos_part="$KAIROS_HOME/accounts/$(kairos_safe_id "${1:-unknown}")"
   kairos_ensure_dir "$kairos_part" || return 1
   printf '%s\n' "$kairos_part"
 }
@@ -68,7 +71,7 @@ kairos_account_record() {
 }
 
 kairos_account_label() {
-  kairos_luuid=${1:-unknown}
+  kairos_luuid=$(kairos_safe_id "${1:-unknown}")
   kairos_ldir="$KAIROS_HOME/accounts/$kairos_luuid"
   kairos_lalias=$(kairos_meta_get "$kairos_ldir" alias)
   if [ -n "$kairos_lalias" ]; then

@@ -10,10 +10,18 @@ kairos_waiter_arm() {
   kairos_wawake=${2:-0}
   kairos_wapart=$(kairos_partition "$kairos_wauuid") || return 1
   kairos_waiter_clear "$kairos_wauuid"
-  printf '%s\n' "$kairos_wawake" > "$kairos_wapart/waiter.wake"
+  # A wait that cannot record its wake time is a wait nobody will be told about,
+  # so it fails loudly rather than printing a holding message that is not true.
+  printf '%s\n' "$kairos_wawake" > "$kairos_wapart/waiter.wake" 2>/dev/null || return 1
   kairos_wascript="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/waiter-run.sh"
+  [ -f "$kairos_wascript" ] || { rm -f "$kairos_wapart/waiter.wake"; return 1; }
   nohup bash "$kairos_wascript" "$kairos_wauuid" "$kairos_wawake" >/dev/null 2>&1 &
-  printf '%s\n' "$!" > "$kairos_wapart/waiter.pid"
+  kairos_wapid=$!
+  if ! printf '%s\n' "$kairos_wapid" > "$kairos_wapart/waiter.pid" 2>/dev/null; then
+    kill "$kairos_wapid" >/dev/null 2>&1 || true
+    rm -f "$kairos_wapart/waiter.wake"
+    return 1
+  fi
   return 0
 }
 
@@ -60,7 +68,10 @@ kairos_waiter_clear() {
   # leaves a process sleeping out a five-hour block for nothing.
   if [ -f "$kairos_wcpart/waiter.pid" ]; then
     kairos_wcpid=$(cat "$kairos_wcpart/waiter.pid" 2>/dev/null)
-    if [ -n "$kairos_wcpid" ]; then
+    # Only signal a process that is still the waiter this file names. Pids are
+    # reused, and a stale file plus a recycled pid would mean killing something
+    # of the user's that has nothing to do with kairos.
+    if [ -n "$kairos_wcpid" ] && ps -p "$kairos_wcpid" -o args= 2>/dev/null | grep -q 'waiter-run\.sh'; then
       kill "$kairos_wcpid" >/dev/null 2>&1 || true
     fi
   fi

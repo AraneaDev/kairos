@@ -22,14 +22,21 @@ if kairos_have_jq && [ -n "$payload" ]; then
   session=$(printf '%s' "$payload" | jq -r '.session_id // empty' 2>/dev/null)
 fi
 [ -n "$session" ] || session="unknown"
-session=$(kairos_safe_id "$session")
+# A rejected id maps to the shared "unknown" name, so writing a binding under
+# it would let two unrelated sessions overwrite each other's account. The
+# session still works, it just does not get a binding of its own.
+if session=$(kairos_safe_id "$session"); then
+  kairos_session_valid=yes
+else
+  kairos_session_valid=no
+fi
 
 uuid=$(kairos_active_account) || true
 kairos_account_record "$uuid"
 part_for_session=$(kairos_partition "$uuid")
 
 kairos_ensure_dir "$KAIROS_HOME/sessions" || exit 0
-printf '%s\n' "$uuid" > "$KAIROS_HOME/sessions/$session"
+[ "$kairos_session_valid" = "yes" ] && printf '%s\n' "$uuid" > "$KAIROS_HOME/sessions/$session"
 
 # A Stop hook killed between claiming a turn marker and deleting it leaves the
 # claimed file behind. It is inert, nothing ever reads it, but it should not
