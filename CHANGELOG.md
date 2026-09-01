@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.5](https://github.com/AraneaDev/kairos/compare/v0.0.4...v0.0.5) (2026-09-01)
+
+
+### Documentation
+
+* show each view once, as a picture rather than twice ([#10](https://github.com/AraneaDev/kairos/issues/10)) ([93e67f1](https://github.com/AraneaDev/kairos/commit/93e67f1f1d563d0c1a41ef21be5e2f1b6e2bb00d))
+
 ## [0.0.4](https://github.com/AraneaDev/kairos/compare/v0.0.3...v0.0.4) (2026-09-01)
 
 
