@@ -1,11 +1,10 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="812" height="250" viewBox="0 0 812 250" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, DejaVu Sans Mono, monospace" font-size="14">
-<rect width="812" height="250" rx="8" fill="#12141a"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="527" height="229" viewBox="0 0 527 229" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'DejaVu Sans Mono', 'Liberation Mono', monospace" font-size="14">
+<rect width="527" height="229" rx="8" fill="#12141a"/>
 <text x="20" y="34" xml:space="preserve"><tspan fill="#4e4e4e">❯</tspan><tspan fill="#d5d8e0"> </tspan><tspan fill="#ffffff">/kairos:kairos accounts</tspan></text>
-<text x="20" y="76" xml:space="preserve"><tspan fill="#ffffff">                                                                      </tspan><tspan fill="#949494">09:52 PM</tspan><tspan fill="#d5d8e0"> </tspan><tspan fill="#949494">claude-opus-5</tspan></text>
-<text x="20" y="97" xml:space="preserve"><tspan fill="#ffffff">●</tspan><tspan fill="#d5d8e0">   account              used   of wall  window</tspan></text>
-<text x="20" y="118" xml:space="preserve"><tspan fill="#d5d8e0">  ────────────────────────────────────────────────────────</tspan></text>
-<text x="20" y="139" xml:space="preserve"><tspan fill="#d5d8e0">  ▸ Max 20x (…eea8c8)   2.84M   49–66%   resets in 2h50m</tspan></text>
-<text x="20" y="160" xml:space="preserve"><tspan fill="#d5d8e0">    Pro (…4f3110)         96k   26–31%   resets in 4h00m</tspan></text>
-<text x="20" y="181" xml:space="preserve"><tspan fill="#d5d8e0">    Max 5x (…1c0de7)        0   no spend block clear</tspan></text>
-<text x="20" y="223" xml:space="preserve"><tspan fill="#949494">✻</tspan><tspan fill="#d5d8e0"> </tspan><tspan fill="#949494">Baked for 3s · done 9:52 PM</tspan></text>
+<text x="20" y="76" xml:space="preserve"><tspan fill="#ffffff">●</tspan><tspan fill="#d5d8e0">   account              used   of wall  window</tspan></text>
+<text x="20" y="97" xml:space="preserve"><tspan fill="#d5d8e0">  ────────────────────────────────────────────────────────</tspan></text>
+<text x="20" y="118" xml:space="preserve"><tspan fill="#d5d8e0">  ▸ Max 20x (…eea8c8)   2.84M   49–66%   resets in 2h50m</tspan></text>
+<text x="20" y="139" xml:space="preserve"><tspan fill="#d5d8e0">    Pro (…4f3110)         96k   26–31%   resets in 4h00m</tspan></text>
+<text x="20" y="160" xml:space="preserve"><tspan fill="#d5d8e0">    Max 5x (…1c0de7)        0   no spend block clear</tspan></text>
+<text x="20" y="202" xml:space="preserve"><tspan fill="#949494">✻</tspan><tspan fill="#d5d8e0"> </tspan><tspan fill="#949494">Baked for 3s · done 9:52 PM</tspan></text>
 </svg>

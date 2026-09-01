@@ -110,7 +110,7 @@ END {
   cw = 8.4; lh = 21; pad = 20
   width = int(maxcols * cw + pad * 2)
   height = int(n * lh + pad * 2)
-  printf "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"%d\" height=\"%d\" viewBox=\"0 0 %d %d\" font-family=\"ui-monospace, SFMono-Regular, Menlo, Consolas, DejaVu Sans Mono, monospace\" font-size=\"14\">\n", width, height, width, height
+  printf "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"%d\" height=\"%d\" viewBox=\"0 0 %d %d\" font-family=\"ui-monospace, SFMono-Regular, Menlo, Consolas, 'DejaVu Sans Mono', 'Liberation Mono', monospace\" font-size=\"14\">\n", width, height, width, height
   printf "<rect width=\"%d\" height=\"%d\" rx=\"8\" fill=\"%s\"/>\n", width, height, BG
   for (i = 1; i <= n; i++) {
     if (out[i] == "") continue

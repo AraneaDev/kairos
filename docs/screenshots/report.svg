@@ -1,14 +1,13 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="812" height="355" viewBox="0 0 812 355" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, DejaVu Sans Mono, monospace" font-size="14">
-<rect width="812" height="355" rx="8" fill="#12141a"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="527" height="334" viewBox="0 0 527 334" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'DejaVu Sans Mono', 'Liberation Mono', monospace" font-size="14">
+<rect width="527" height="334" rx="8" fill="#12141a"/>
 <text x="20" y="34" xml:space="preserve"><tspan fill="#4e4e4e">❯</tspan><tspan fill="#d5d8e0"> </tspan><tspan fill="#ffffff">/kairos:kairos</tspan></text>
-<text x="20" y="76" xml:space="preserve"><tspan fill="#ffffff">                                                                      </tspan><tspan fill="#949494">09:46 PM</tspan><tspan fill="#d5d8e0"> </tspan><tspan fill="#949494">claude-opus-5</tspan></text>
-<text x="20" y="97" xml:space="preserve"><tspan fill="#ffffff">●</tspan><tspan fill="#d5d8e0"> Max 20x (…eea8c8)                        resets in 2h50m</tspan></text>
-<text x="20" y="118" xml:space="preserve"><tspan fill="#d5d8e0">  ────────────────────────────────────────────────────────</tspan></text>
-<text x="20" y="139" xml:space="preserve"><tspan fill="#d5d8e0">    used     2.84M · 49–66% of the wall</tspan></text>
-<text x="20" y="160" xml:space="preserve"><tspan fill="#d5d8e0">    ceiling  4.25M to 5.75M, from 1 recorded wall</tspan></text>
-<text x="20" y="181" xml:space="preserve"><tspan fill="#d5d8e0">    burn     1.31M/h over 2h10m of this block</tspan></text>
-<text x="20" y="223" xml:space="preserve"><tspan fill="#d5d8e0">    claude-opus-5     █████████████░░░░░   2.10M   73%</tspan></text>
-<text x="20" y="244" xml:space="preserve"><tspan fill="#d5d8e0">    claude-sonnet-5   █████░░░░░░░░░░░░░    740k   26%</tspan></text>
-<text x="20" y="286" xml:space="preserve"><tspan fill="#d5d8e0">    3 turns · next turn ~610k</tspan></text>
-<text x="20" y="328" xml:space="preserve"><tspan fill="#949494">✻</tspan><tspan fill="#d5d8e0"> </tspan><tspan fill="#949494">Crunched for 4s · done 9:46 PM</tspan></text>
+<text x="20" y="76" xml:space="preserve"><tspan fill="#ffffff">●</tspan><tspan fill="#d5d8e0"> Max 20x (…eea8c8)                        resets in 2h50m</tspan></text>
+<text x="20" y="97" xml:space="preserve"><tspan fill="#d5d8e0">  ────────────────────────────────────────────────────────</tspan></text>
+<text x="20" y="118" xml:space="preserve"><tspan fill="#d5d8e0">    used     2.84M · 49–66% of the wall</tspan></text>
+<text x="20" y="139" xml:space="preserve"><tspan fill="#d5d8e0">    ceiling  4.25M to 5.75M, from 1 recorded wall</tspan></text>
+<text x="20" y="160" xml:space="preserve"><tspan fill="#d5d8e0">    burn     1.31M/h over 2h10m of this block</tspan></text>
+<text x="20" y="202" xml:space="preserve"><tspan fill="#d5d8e0">    claude-opus-5     █████████████░░░░░   2.10M   73%</tspan></text>
+<text x="20" y="223" xml:space="preserve"><tspan fill="#d5d8e0">    claude-sonnet-5   █████░░░░░░░░░░░░░    740k   26%</tspan></text>
+<text x="20" y="265" xml:space="preserve"><tspan fill="#d5d8e0">    3 turns · next turn ~610k</tspan></text>
+<text x="20" y="307" xml:space="preserve"><tspan fill="#949494">✻</tspan><tspan fill="#d5d8e0"> </tspan><tspan fill="#949494">Crunched for 4s · done 9:46 PM</tspan></text>
 </svg>
