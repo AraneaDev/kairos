@@ -75,11 +75,21 @@ kairos_account_label() {
     printf '%s\n' "$kairos_lalias"
     return 0
   fi
-  case "$(kairos_meta_get "$kairos_ldir" org_type)" in
-    claude_pro) kairos_lname="Pro" ;;
-    claude_max) kairos_lname="Max" ;;
-    ""|unknown) kairos_lname="account" ;;
-    *) kairos_lname=$(kairos_meta_get "$kairos_ldir" org_type) ;;
+  # The tier is what actually distinguishes two subscriptions: a Max 5x and a
+  # Max 20x share organizationType "claude_max" and have very different
+  # ceilings. Observed values are like "default_claude_max_20x" and
+  # "default_claude", so match on the fragment rather than the whole string.
+  case "$(kairos_meta_get "$kairos_ldir" rate_tier)" in
+    *max_20x*) kairos_lname="Max 20x" ;;
+    *max_5x*) kairos_lname="Max 5x" ;;
+    *)
+      case "$(kairos_meta_get "$kairos_ldir" org_type)" in
+        claude_pro) kairos_lname="Pro" ;;
+        claude_max) kairos_lname="Max" ;;
+        ""|unknown) kairos_lname="account" ;;
+        *) kairos_lname=$(kairos_meta_get "$kairos_ldir" org_type) ;;
+      esac
+      ;;
   esac
   printf '%s (…%s)\n' "$kairos_lname" "$(printf '%s' "$kairos_luuid" | tail -c 6)"
 }

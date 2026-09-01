@@ -76,7 +76,7 @@ kairos_harvest_walls() {
 # precision. The margin narrows once there are enough walls to average out.
 kairos_band() {
   kairos_nuuid=${1:-unknown}
-  kairos_ndir=$(kairos_partition "$kairos_nuuid") || return 1
+  kairos_ndir=$(kairos_partition "$kairos_nuuid") || { printf '0\t0\t0\n'; return 0; }
   kairos_nfile="$kairos_ndir/walls.tsv"
   # No walls means no band. Not a guessed one.
   #

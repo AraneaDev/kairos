@@ -30,9 +30,22 @@ case "${1:-report}" in
     kairos_prune "$uuid"
     kairos_report "$uuid"
     ;;
+  accounts)
+    kairos_refresh "$uuid"
+    kairos_accounts_report "$uuid"
+    ;;
+  alias)
+    shift
+    if [ -z "${1:-}" ]; then
+      echo "kairos: alias needs a name" >&2
+      exit 1
+    fi
+    kairos_meta_set "$(kairos_partition "$uuid")" alias "$*"
+    printf 'kairos: this account is now called "%s"\n' "$*"
+    ;;
   *)
     printf 'kairos: unknown command "%s"\n' "${1:-}" >&2
-    printf 'usage: kairos [report]\n' >&2
+    printf 'usage: kairos [report|accounts|alias <name>]\n' >&2
     exit 1
     ;;
 esac

@@ -115,6 +115,13 @@ kairos_meta_set "$part" alias "work laptop"
 is "an alias wins over the derived label" "work laptop" "$(kairos_account_label "aaaaaaaa-1111-2222-3333-444444444444")"
 is "setting an alias preserves other keys" "claude_pro" "$(kairos_meta_get "$part" org_type)"
 
+tierpart=$(kairos_partition "eeee-max20")
+kairos_meta_set "$tierpart" org_type claude_max
+kairos_meta_set "$tierpart" rate_tier default_claude_max_20x
+is "a max 20x account is labelled by its tier" "Max 20x (…-max20)" "$(kairos_account_label "eeee-max20")"
+kairos_meta_set "$tierpart" rate_tier default_claude_max_5x
+is "and a max 5x is told apart from it" "Max 5x (…-max20)" "$(kairos_account_label "eeee-max20")"
+
 first=$(kairos_meta_get "$part" first_seen)
 kairos_account_record "aaaaaaaa-1111-2222-3333-444444444444"
 is "first_seen is written once and never moves" "$first" "$(kairos_meta_get "$part" first_seen)"
@@ -791,6 +798,48 @@ contains "an account with no activity says so" "nothing recorded for this accoun
 out=$(bash "$ROOT/tools/kairos.sh" report 2>/dev/null)
 contains "the CLI prints the report" "Pro (…444444)" "$out"
 is "an unknown subcommand exits non-zero" "1" "$(bash "$ROOT/tools/kairos.sh" nonsense >/dev/null 2>&1; echo $?)"
+teardown_env
+
+echo
+echo "accounts"
+setup_env
+# shellcheck source=/dev/null
+. "$LIB/common.sh"
+# shellcheck source=/dev/null
+. "$LIB/account.sh"
+# shellcheck source=/dev/null
+. "$LIB/meter.sh"
+# shellcheck source=/dev/null
+. "$LIB/wall.sh"
+# shellcheck source=/dev/null
+. "$LIB/predict.sh"
+# shellcheck source=/dev/null
+. "$LIB/format.sh"
+
+acct="aaaaaaaa-1111-2222-3333-444444444444"
+other="bbbbbbbb-1111-2222-3333-555555555555"
+kairos_account_record "$acct"
+opart=$(kairos_partition "$other")
+kairos_meta_set "$opart" org_type claude_max
+now=$(kairos_now)
+printf '%s\t%s\ts1\tm\t100\n' "$((now - 100))" "$acct" > "$KAIROS_HOME/accounts/$acct/ledger.tsv"
+# The other account's block ended an hour ago, so it is known to be clear.
+printf '%s\t%s\ts2\tm\t100\n' "$((now - 21600))" "$other" > "$opart/ledger.tsv"
+
+out=$(kairos_accounts_report "$acct")
+contains "lists the active account" "Pro (…444444)" "$out"
+contains "marks which one is active" "active" "$out"
+contains "lists the other account" "Max (…555555)" "$out"
+
+is "finds another account whose block has ended" "$other" "$(kairos_other_clear_account "$acct")"
+
+# An account still inside its own block is not offered as clear.
+printf '%s\t%s\ts2\tm\t100\n' "$((now - 100))" "$other" > "$opart/ledger.tsv"
+is "an account still inside its block is not offered" "" "$(kairos_other_clear_account "$acct")"
+
+bash "$ROOT/tools/kairos.sh" alias "work laptop" >/dev/null 2>&1
+is "the alias is stored" "work laptop" "$(kairos_meta_get "$KAIROS_HOME/accounts/$acct" alias)"
+contains "and shows up in the report" "work laptop" "$(bash "$ROOT/tools/kairos.sh" accounts 2>/dev/null)"
 teardown_env
 
 printf '\n%s passed, %s failed\n' "$PASS" "$FAIL"

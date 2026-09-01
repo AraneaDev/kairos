@@ -88,3 +88,60 @@ EOF
       "$kairos_rturns" "$(kairos_human "$(kairos_predict "$kairos_ruuid" unknown)")"
   fi
 }
+
+# Every account kairos has seen, and where each one stands. For anyone holding
+# two subscriptions this is what turns switching into a decision.
+kairos_accounts_report() {
+  kairos_aactive=${1:-}
+  [ -d "$KAIROS_HOME/accounts" ] || return 0
+  kairos_anow=$(kairos_now)
+  for kairos_adir in "$KAIROS_HOME/accounts"/*; do
+    [ -d "$kairos_adir" ] || continue
+    kairos_auuid=$(basename "$kairos_adir")
+    # shellcheck disable=SC2034  # kairos_astart is read to consume the field
+    read -r kairos_astart kairos_aend kairos_aused <<EOF
+$(kairos_block "$kairos_auuid")
+EOF
+    read -r kairos_alow kairos_ahigh kairos_aconf <<EOF
+$(kairos_band "$kairos_auuid")
+EOF
+    kairos_amark="       "
+    [ "$kairos_auuid" = "$kairos_aactive" ] && kairos_amark="active "
+    if [ "$kairos_aend" -gt "$kairos_anow" ]; then
+      kairos_awhen="resets in $(kairos_duration $((kairos_aend - kairos_anow)))"
+    else
+      kairos_awhen="block clear"
+    fi
+    printf '%s%-18s %8s used · %s–%s%% · %s · band from %s wall(s)\n' \
+      "$kairos_amark" "$(kairos_account_label "$kairos_auuid")" \
+      "$(kairos_human "$kairos_aused")" \
+      "$(kairos_pct "$kairos_aused" "$kairos_ahigh")" \
+      "$(kairos_pct "$kairos_aused" "$kairos_alow")" \
+      "$kairos_awhen" "$kairos_aconf"
+  done
+}
+
+# Another known account whose block has already ended, if there is one. Knowing
+# this needs no login: that partition records what was spent and when, and time
+# keeps moving, so a block whose end has passed is clear even though nothing has
+# been written to it since.
+kairos_other_clear_account() {
+  kairos_oactive=${1:-}
+  [ -d "$KAIROS_HOME/accounts" ] || return 0
+  kairos_onow=$(kairos_now)
+  for kairos_odir in "$KAIROS_HOME/accounts"/*; do
+    [ -d "$kairos_odir" ] || continue
+    kairos_ouuid=$(basename "$kairos_odir")
+    [ "$kairos_ouuid" = "$kairos_oactive" ] && continue
+    [ "$kairos_ouuid" = "unknown" ] && continue
+    # shellcheck disable=SC2034  # only kairos_oend is used, the rest consume fields
+    read -r kairos_ostart kairos_oend kairos_oused <<EOF
+$(kairos_block "$kairos_ouuid")
+EOF
+    if [ "$kairos_oend" -le "$kairos_onow" ]; then
+      printf '%s\n' "$kairos_ouuid"
+      return 0
+    fi
+  done
+  return 0
+}
