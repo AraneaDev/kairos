@@ -99,6 +99,8 @@ asserts "kairos_ensure_dir is idempotent" kairos_ensure_dir "$KAIROS_TESTDIR/a/b
 
 is "a uuid is a safe id" "3f2a-11ee-b0c4" "$(kairos_safe_id 3f2a-11ee-b0c4)"
 is "a traversal is refused" "unknown" "$(kairos_safe_id ../config)"
+refutes "and a refused id reports failure" kairos_safe_id ../config
+asserts "while a valid one reports success" kairos_safe_id 3f2a-11ee-b0c4
 teardown_env
 
 echo
@@ -114,6 +116,14 @@ is "reads the active account uuid" "aaaaaaaa-1111-2222-3333-444444444444" "$(kai
 part=$(kairos_partition "aaaaaaaa-1111-2222-3333-444444444444")
 is "partition path" "$KAIROS_HOME/accounts/aaaaaaaa-1111-2222-3333-444444444444" "$part"
 is "partition directory is created" "yes" "$([ -d "$part" ] && echo yes || echo no)"
+
+# A corrupt account id must not fall back to the shared safe name. That name is
+# also where a session with an unreadable ~/.claude.json lands, so accepting it
+# would pool two different accounts into one meter, which is the single thing
+# partitioning exists to prevent.
+refutes "a traversing account id has no partition" kairos_partition "../../escapee"
+is "and nothing is created outside the accounts directory" "no" \
+  "$([ -e "$KAIROS_HOME/escapee" ] && echo yes || echo no)"
 
 kairos_account_record "aaaaaaaa-1111-2222-3333-444444444444"
 is "records the organisation type" "claude_pro" "$(kairos_meta_get "$part" org_type)"

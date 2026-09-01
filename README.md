@@ -5,7 +5,7 @@
 **Knows roughly where your usage limit is, and stops you before you walk into it.**
 
 [![CI](https://github.com/AraneaDev/kairos/actions/workflows/ci.yml/badge.svg)](https://github.com/AraneaDev/kairos/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/tests-210%20passing-2b8a3e)](tests/run.sh)
+[![Tests](https://img.shields.io/badge/tests-214%20passing-2b8a3e)](tests/run.sh)
 [![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-364fc7)](#requirements)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 

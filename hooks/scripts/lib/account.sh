@@ -23,7 +23,14 @@ kairos_partition() {
   # The account uuid is read from a file on disk, so it reaches a path the same
   # way a session id does and gets the same treatment. One slash in it would
   # put an account's whole state outside the accounts directory.
-  kairos_part="$KAIROS_HOME/accounts/$(kairos_safe_id "${1:-unknown}")"
+  #
+  # A rejected id fails the call rather than falling back to the shared safe
+  # name. That name is also what a genuinely unreadable ~/.claude.json resolves
+  # to, so accepting it here would pool a corrupt account's usage together with
+  # every session that could not identify its account at all, and the whole
+  # point of partitioning is that two accounts never share a meter.
+  kairos_psafe=$(kairos_safe_id "${1:-unknown}") || return 1
+  kairos_part="$KAIROS_HOME/accounts/$kairos_psafe"
   kairos_ensure_dir "$kairos_part" || return 1
   printf '%s\n' "$kairos_part"
 }
