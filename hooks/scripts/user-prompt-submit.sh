@@ -25,6 +25,14 @@ session=$(printf '%s' "$payload" | jq -r '.session_id // "unknown"' 2>/dev/null)
 prompt=$(printf '%s' "$payload" | jq -r '.prompt // ""' 2>/dev/null)
 [ -n "$session" ] || session="unknown"
 
+# kairos's own commands are submitted as ordinary prompts, so without this the
+# gate refuses the very commands its refusal message tells you to run, and the
+# stash below overwrites the held prompt with the word you typed to rescue it.
+# There is no recovery from inside the product once that happens.
+case "$prompt" in
+  /kairos*|kairos\ *) exit 0 ;;
+esac
+
 session=$(kairos_safe_id "$session")
 
 bound=""

@@ -314,6 +314,13 @@ setup_env
 . "$LIB/account.sh"
 # shellcheck source=/dev/null
 . "$LIB/meter.sh"
+# These fixtures use synthetic epochs to exercise window chaining, which is a
+# clock-relative calculation, so the clock is frozen alongside them. Without
+# this they would all read as long expired, which is a real behaviour the
+# "an ended window reports nothing" assertion below covers on its own.
+# shellcheck disable=SC2317  # invoked indirectly, through the sourced libraries
+kairos_now() { printf '%s\n' "${KAIROS_FROZEN_NOW:-$(date +%s)}"; }
+KAIROS_FROZEN_NOW=1029000
 
 acct="bbbb"
 part=$(kairos_partition "$acct")
@@ -418,6 +425,22 @@ is "a window start floors to ten minutes" "3000000" "$bstart"
 # An empty ledger must be answerable, not an error.
 rm -f "$part/ledger.tsv" "$part/walls.tsv"
 is "an empty ledger reports zeroes" "0	0	0" "$(kairos_block "$acct")"
+
+# A window whose end has passed is not the current one. Without this the gate
+# would weigh a finished window's spending against the ceiling and refuse every
+# prompt, and a refused prompt writes no new row, so nothing could ever open
+# the next window.
+{
+  printf '900000\t%s\ts1\tm\t400\n' "$acct"
+  printf '901000\t%s\ts1\tm\t500\n' "$acct"
+} > "$part/ledger.tsv"
+KAIROS_FROZEN_NOW=2000000
+is "a window that has already ended reports nothing" "0	0	0" "$(kairos_block "$acct")"
+KAIROS_FROZEN_NOW=1029000
+
+unset KAIROS_FROZEN_NOW
+# shellcheck disable=SC2317  # invoked indirectly, through the sourced libraries
+kairos_now() { date +%s; }
 teardown_env
 
 echo
@@ -914,6 +937,20 @@ mv "$KAIROS_CLAUDE_JSON" "$KAIROS_CLAUDE_JSON.away"
 printf '%s' "$prompt" | bash "$ROOT/hooks/scripts/user-prompt-submit.sh" >/dev/null 2>&1
 is "an unreadable account leaves the binding alone" "switched-2222" "$(cat "$KAIROS_HOME/sessions/sZ")"
 mv "$KAIROS_CLAUDE_JSON.away" "$KAIROS_CLAUDE_JSON"
+
+# kairos's own commands must never be gated. They are submitted as ordinary
+# prompts, so without an exemption the gate refuses the very commands its
+# refusal message recommends, and the stash is overwritten with the rescue
+# attempt, destroying the prompt being held.
+printf '%s\tkairos-rescue\ts1\tm\t5690000\n' "$(kairos_now)" > "$part/ledger.tsv"
+printf '%s\t5000000\t%s\n' "$(($(kairos_now) - 90000))" "$(($(kairos_now) + 3600))" > "$part/walls.tsv"
+printf 'held prompt' > "$part/stash"
+for cmd in '/kairos wait' '/kairos go' '/kairos stop'; do
+  printf '{"session_id":"sZ","prompt":"%s"}' "$cmd" \
+    | bash "$ROOT/hooks/scripts/user-prompt-submit.sh" >/dev/null 2>&1
+  is "the gate never blocks $cmd" "0" "$?"
+done
+is "and a rescue command does not overwrite the stash" "held prompt" "$(cat "$part/stash")"
 
 # The gate can be switched off entirely.
 is "KAIROS_GATE=0 never blocks" "0" \

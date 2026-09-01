@@ -156,5 +156,20 @@ kairos_block() {
     fi
   fi
 
+  # A window that has already ended is not the current one. Reconstructing from
+  # row timestamps alone cannot see that, and the consequence is severe: after a
+  # window resets, the gate would keep weighing yesterday's spending against the
+  # ceiling and refuse every prompt. That state is self sustaining, because a
+  # refused prompt produces no assistant message, so no new row can ever arrive
+  # to open the next window, and it would persist until pruning finally drops
+  # the stale rows up to a day later.
+  #
+  # Nothing has been spent in the current window until something is written to
+  # it, so say exactly that.
+  if [ "$kairos_bend" -le "$(kairos_now)" ]; then
+    printf '0\t0\t0\n'
+    return 0
+  fi
+
   printf '%s\t%s\t%s\n' "$kairos_bstart" "$kairos_bend" "$kairos_bused"
 }
