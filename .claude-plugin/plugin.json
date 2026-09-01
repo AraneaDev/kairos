@@ -1,11 +1,22 @@
 {
   "name": "kairos",
   "displayName": "kairos",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Tracks what is left of the five-hour usage window per account, predicts what the next turn will cost, and stops the prompt before a turn puts you through the wall.",
-  "author": { "name": "AraneaDev", "url": "https://github.com/AraneaDev" },
+  "author": {
+    "name": "AraneaDev",
+    "url": "https://github.com/AraneaDev"
+  },
   "homepage": "https://github.com/AraneaDev/kairos",
   "repository": "https://github.com/AraneaDev/kairos",
   "license": "MIT",
-  "keywords": ["usage", "rate-limit", "tokens", "budget", "session", "hooks", "productivity"]
+  "keywords": [
+    "usage",
+    "rate-limit",
+    "tokens",
+    "budget",
+    "session",
+    "hooks",
+    "productivity"
+  ]
 }
