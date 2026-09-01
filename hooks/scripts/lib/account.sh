@@ -37,7 +37,11 @@ kairos_partition() {
 
 kairos_meta_get() {
   if [ -f "$1/meta" ]; then
-    awk -F'\t' -v k="$2" '$1 == k { print $2; exit }' "$1/meta"
+    # The file can disappear between the test and the read. Replacing a file is
+    # not atomic on every platform this runs on, so a concurrent writer's
+    # replacement leaves a window where it briefly does not exist. A missing
+    # value is the right answer then, not an error on the user's terminal.
+    awk -F'\t' -v k="$2" '$1 == k { print $2; exit }' "$1/meta" 2>/dev/null
   fi
   return 0
 }
@@ -46,11 +50,26 @@ kairos_meta_set() {
   kairos_mdir=$1; kairos_mkey=$2; kairos_mval=$3
   kairos_ensure_dir "$kairos_mdir" || return 1
   kairos_mtmp="$kairos_mdir/meta.tmp.$$"
-  if [ -f "$kairos_mdir/meta" ]; then
-    awk -F'\t' -v k="$kairos_mkey" '$1 != k' "$kairos_mdir/meta" > "$kairos_mtmp" || { rm -f "$kairos_mtmp"; return 1; }
-  else
-    : > "$kairos_mtmp" || { rm -f "$kairos_mtmp"; return 1; }
-  fi
+  # Copying the existing keys is a read that races with another writer's
+  # replacement of the same file. On Windows replacing a file is not atomic, so
+  # meta can vanish for an instant and the read fails. Retry rather than write a
+  # meta missing every key the read did not get, and treat a file that is still
+  # gone on the last attempt as an empty one.
+  kairos_mtries=0
+  while :; do
+    if [ ! -f "$kairos_mdir/meta" ]; then
+      : > "$kairos_mtmp" || { rm -f "$kairos_mtmp"; return 1; }
+      break
+    fi
+    if awk -F'\t' -v k="$kairos_mkey" '$1 != k' "$kairos_mdir/meta" > "$kairos_mtmp" 2>/dev/null; then
+      break
+    fi
+    kairos_mtries=$((kairos_mtries + 1))
+    if [ "$kairos_mtries" -ge 5 ]; then
+      : > "$kairos_mtmp" || { rm -f "$kairos_mtmp"; return 1; }
+      break
+    fi
+  done
   printf '%s\t%s\n' "$kairos_mkey" "$kairos_mval" >> "$kairos_mtmp" || { rm -f "$kairos_mtmp"; return 1; }
   mv "$kairos_mtmp" "$kairos_mdir/meta" || { rm -f "$kairos_mtmp"; return 1; }
 }
