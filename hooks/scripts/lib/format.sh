@@ -145,3 +145,25 @@ EOF
   done
   return 0
 }
+
+# The closing line, in the register claude-timestamp uses for its own.
+kairos_summary_line() {
+  kairos_suuid=${1:-unknown}
+  kairos_spart=$(kairos_partition "$kairos_suuid") || return 1
+  # shellcheck disable=SC2034  # only kairos_sused is used, the rest consume fields
+  read -r kairos_sstart kairos_send kairos_sused <<EOF
+$(kairos_block "$kairos_suuid")
+EOF
+  # shellcheck disable=SC2034  # kairos_sconf is read to consume the field
+  read -r kairos_slow kairos_shigh kairos_sconf <<EOF
+$(kairos_band "$kairos_suuid")
+EOF
+  kairos_sturns=0
+  if [ -f "$kairos_spart/turns.tsv" ]; then
+    kairos_sturns=$(wc -l < "$kairos_spart/turns.tsv" | tr -d ' ')
+  fi
+  printf 'kairos: %s billable over %s turns, %s–%s%% of the window.\n' \
+    "$(kairos_human "$kairos_sused")" "$kairos_sturns" \
+    "$(kairos_pct "$kairos_sused" "$kairos_shigh")" \
+    "$(kairos_pct "$kairos_sused" "$kairos_slow")"
+}

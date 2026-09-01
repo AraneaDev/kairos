@@ -975,5 +975,46 @@ contains "session start surfaces the stashed prompt" "do the thing" "$out"
 contains "and says what to do with it" "resume" "$out"
 teardown_env
 
+echo
+echo "calibrate and the summary"
+setup_env
+# shellcheck source=/dev/null
+. "$LIB/common.sh"
+# shellcheck source=/dev/null
+. "$LIB/account.sh"
+# shellcheck source=/dev/null
+. "$LIB/meter.sh"
+# shellcheck source=/dev/null
+. "$LIB/wall.sh"
+# shellcheck source=/dev/null
+. "$LIB/predict.sh"
+# shellcheck source=/dev/null
+. "$LIB/format.sh"
+
+acct="aaaaaaaa-1111-2222-3333-444444444444"
+part=$(kairos_partition "$acct")
+kairos_account_record "$acct"
+kairos_meta_set "$part" first_seen 1788999999
+mkdir -p "$KAIROS_PROJECTS_DIR/proj"
+cp "$ROOT/tests/fixtures/refusal.jsonl" "$KAIROS_PROJECTS_DIR/proj/r.jsonl"
+# Older than a day, so only a full rescan finds it.
+touch -t 202608150000 "$KAIROS_PROJECTS_DIR/proj/r.jsonl" 2>/dev/null || true
+
+out=$(bash "$ROOT/tools/kairos.sh" calibrate 2>&1)
+contains "calibrate reports what it set aside" "unattributed" "$out"
+is "and does not use it for the band" "0" "$(kairos_band "$acct" | cut -f3)"
+
+now=$(kairos_now)
+{
+  printf '%s\t%s\ts1\tm\t1000000\n' "$((now - 3600))" "$acct"
+  printf '%s\t%s\ts1\tm\t420000\n' "$((now - 60))" "$acct"
+} > "$part/ledger.tsv"
+kairos_record_turn "$acct" s1 500000
+kairos_record_turn "$acct" s1 920000
+line=$(kairos_summary_line "$acct")
+contains "the summary reports the total" "1.42M" "$line"
+contains "the summary counts the turns" "2 turns" "$line"
+teardown_env
+
 printf '\n%s passed, %s failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

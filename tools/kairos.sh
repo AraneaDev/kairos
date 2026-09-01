@@ -56,6 +56,24 @@ EOF
     printf 'kairos: holding. You will be told in %s, when the window resets.\n' \
       "$(kairos_duration $((wend - $(kairos_now))))"
     ;;
+  calibrate)
+    kairos_refresh "$uuid"
+    part=$(kairos_partition "$uuid")
+    # A full rescan rather than the last day, since a wall stays useful as
+    # calibration long after the ledger has rotated past it.
+    kairos_harvest_walls "$uuid" -type f
+    used=0
+    [ -f "$part/walls.tsv" ] && used=$(wc -l < "$part/walls.tsv" | tr -d ' ')
+    aside=0
+    [ -f "$part/walls.unattributed.tsv" ] && aside=$(wc -l < "$part/walls.unattributed.tsv" | tr -d ' ')
+    printf 'kairos: %s wall(s) calibrating this account.\n' "$used"
+    if [ "$aside" -gt 0 ]; then
+      printf '        %s unattributed wall(s) set aside. They predate kairos on this\n' "$aside"
+      printf '        account and may belong to a different subscription, so they are\n'
+      printf '        recorded but not used.\n'
+    fi
+    kairos_report "$uuid"
+    ;;
   go)
     : > "$(kairos_partition "$uuid")/pass.once"
     echo "kairos: the next prompt goes through, then the gate re-arms."
@@ -66,7 +84,7 @@ EOF
     ;;
   *)
     printf 'kairos: unknown command "%s"\n' "${1:-}" >&2
-    printf 'usage: kairos [report|accounts|alias <name>|wait|go|stop]\n' >&2
+    printf 'usage: kairos [report|accounts|alias <name>|wait|go|stop|calibrate]\n' >&2
     exit 1
     ;;
 esac
