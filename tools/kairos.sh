@@ -43,9 +43,17 @@ case "${1:-report}" in
     kairos_meta_set "$(kairos_partition "$uuid")" alias "$*"
     printf 'kairos: this account is now called "%s"\n' "$*"
     ;;
+  go)
+    : > "$(kairos_partition "$uuid")/pass.once"
+    echo "kairos: the next prompt goes through, then the gate re-arms."
+    ;;
+  stop)
+    rm -f "$(kairos_partition "$uuid")/stash"
+    echo "kairos: stashed prompt dropped."
+    ;;
   *)
     printf 'kairos: unknown command "%s"\n' "${1:-}" >&2
-    printf 'usage: kairos [report|accounts|alias <name>]\n' >&2
+    printf 'usage: kairos [report|accounts|alias <name>|go|stop]\n' >&2
     exit 1
     ;;
 esac

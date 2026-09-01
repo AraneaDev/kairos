@@ -842,5 +842,88 @@ is "the alias is stored" "work laptop" "$(kairos_meta_get "$KAIROS_HOME/accounts
 contains "and shows up in the report" "work laptop" "$(bash "$ROOT/tools/kairos.sh" accounts 2>/dev/null)"
 teardown_env
 
+echo
+echo "hooks/user-prompt-submit.sh: the gate"
+setup_env
+# shellcheck source=/dev/null
+. "$LIB/common.sh"
+# shellcheck source=/dev/null
+. "$LIB/account.sh"
+
+acct="aaaaaaaa-1111-2222-3333-444444444444"
+part=$(kairos_partition "$acct")
+kairos_account_record "$acct"
+mkdir -p "$KAIROS_HOME/sessions"
+printf '%s\n' "$acct" > "$KAIROS_HOME/sessions/sZ"
+prompt='{"session_id":"sZ","prompt":"do the thing"}'
+
+# An account with no recorded refusal must never be gated, however much it has
+# spent, because there is no ceiling to compare against.
+now=$(kairos_now)
+printf '%s\t%s\tsZ\tm\t99000000\n' "$((now - 60))" "$acct" > "$part/ledger.tsv"
+printf '%s' "$prompt" | bash "$ROOT/hooks/scripts/user-prompt-submit.sh" >/dev/null 2>&1
+is "an uncalibrated account is never gated" "0" "$?"
+rm -f "$part/turn.start"
+
+# From here the account has one recorded wall at 5.0M, so a band exists.
+printf '%s\t5000000\t%s\n' "$((now - 90000))" "$((now - 86400))" > "$part/walls.tsv"
+
+# Plenty of room: the prompt passes silently and a turn marker is written.
+printf '%s\t%s\tsZ\tm\t1000\n' "$((now - 60))" "$acct" > "$part/ledger.tsv"
+out=$(printf '%s' "$prompt" | bash "$ROOT/hooks/scripts/user-prompt-submit.sh" 2>&1)
+is "a prompt with room passes" "0" "$?"
+is "and prints nothing at all" "" "$out"
+is "and marks the turn as started" "yes" "$([ -f "$part/turn.start" ] && echo yes || echo no)"
+is "the marker names the session" "sZ" "$(awk -F'\t' 'NR==1 {print $2}' "$part/turn.start")"
+
+# Near the wall: the prompt is refused and the text is kept.
+rm -f "$part/turn.start"
+printf '%s\t%s\tsZ\tm\t5690000\n' "$((now - 60))" "$acct" > "$part/ledger.tsv"
+out=$(printf '%s' "$prompt" | bash "$ROOT/hooks/scripts/user-prompt-submit.sh" 2>&1)
+rc=$?
+is "a prompt near the wall is refused" "2" "$rc"
+contains "the refusal names the estimate" "predicted" "$out"
+contains "the refusal offers to wait" "/kairos wait" "$out"
+contains "the refusal offers to override" "/kairos go" "$out"
+contains "the refusal offers to drop it" "/kairos stop" "$out"
+is "the prompt text is stashed" "do the thing" "$(cat "$part/stash" 2>/dev/null)"
+is "no turn is started when refused" "no" "$([ -f "$part/turn.start" ] && echo yes || echo no)"
+
+# go overrides exactly once.
+bash "$ROOT/tools/kairos.sh" go >/dev/null 2>&1
+printf '%s' "$prompt" | bash "$ROOT/hooks/scripts/user-prompt-submit.sh" >/dev/null 2>&1
+is "go lets the next prompt through" "0" "$?"
+printf '%s' "$prompt" | bash "$ROOT/hooks/scripts/user-prompt-submit.sh" >/dev/null 2>&1
+is "and the gate re-arms behind it" "2" "$?"
+
+# stop clears the stash.
+bash "$ROOT/tools/kairos.sh" stop >/dev/null 2>&1
+is "stop drops the stashed prompt" "no" "$([ -f "$part/stash" ] && echo yes || echo no)"
+
+# A /login part way through a session moves the budget being spent, so the
+# gate must follow it. Reading the stale binding would weigh one subscription's
+# spending against the other's ceiling.
+printf '{"oauthAccount":{"accountUuid":"switched-2222","organizationType":"claude_max","organizationRateLimitTier":"default_claude_max_20x"}}\n' > "$KAIROS_CLAUDE_JSON"
+printf '%s' "$prompt" | bash "$ROOT/hooks/scripts/user-prompt-submit.sh" >/dev/null 2>&1
+is "a mid-session account switch rebinds the session" "switched-2222" "$(cat "$KAIROS_HOME/sessions/sZ")"
+is "and the new account is recorded" "claude_max" "$(kairos_meta_get "$KAIROS_HOME/accounts/switched-2222" org_type)"
+
+# With no readable account at all, the existing binding stands rather than the
+# session falling into the unknown bucket.
+mv "$KAIROS_CLAUDE_JSON" "$KAIROS_CLAUDE_JSON.away"
+printf '%s' "$prompt" | bash "$ROOT/hooks/scripts/user-prompt-submit.sh" >/dev/null 2>&1
+is "an unreadable account leaves the binding alone" "switched-2222" "$(cat "$KAIROS_HOME/sessions/sZ")"
+mv "$KAIROS_CLAUDE_JSON.away" "$KAIROS_CLAUDE_JSON"
+
+# The gate can be switched off entirely.
+is "KAIROS_GATE=0 never blocks" "0" \
+  "$(KAIROS_GATE=0 sh -c "printf '%s' '$prompt' | bash '$ROOT/hooks/scripts/user-prompt-submit.sh' >/dev/null 2>&1"; echo $?)"
+
+# Fail open: a broken meter must never stop work.
+rm -rf "$KAIROS_HOME/accounts"
+is "an unreadable state passes the prompt" "0" \
+  "$(printf '%s' "$prompt" | bash "$ROOT/hooks/scripts/user-prompt-submit.sh" >/dev/null 2>&1; echo $?)"
+teardown_env
+
 printf '\n%s passed, %s failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
