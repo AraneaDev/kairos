@@ -39,24 +39,10 @@ Kairos watches how much of the window you have spent, predicts what your next
 turn will cost, and stops the prompt before that turn takes you through the
 wall. When it stops you it asks what to do, and leaves the choice with you.
 
-![The gate holding a prompt back](docs/screenshots/gate.svg)
+The refusal is printed by a hook, before the prompt reaches the model, so it
+costs no tokens and nothing was sent.
 
-The refusal is printed by a hook, before the prompt reaches the model. It costs
-no tokens, and nothing was sent:
-
-```text
-kairos: this turn would go through the wall
-────────────────────────────────────────────────────────
-  next     ~95k predicted
-  room     210k before the optimistic wall
-  resets   in 2h41m
-  clear    Max 20x (…a8c8) has room
-
-  /kairos wait   hold, and tell me when the window resets
-  /kairos go     send it anyway
-  /kairos stop   drop it
-  → to switch, run /login yourself
-```
+![The gate holding a prompt back, offering to wait, to send it anyway, or to drop it](docs/screenshots/gate.svg)
 
 ## What it knows, and what it does not
 
@@ -67,20 +53,7 @@ writes.
 That reconstruction is exact for consumption and inexact for the ceiling, so
 Kairos reports the ceiling as a range and says how much evidence is behind it:
 
-![The /kairos report](docs/screenshots/report.svg)
-
-```text
-Max 20x (…eea8c8)                        resets in 2h50m
-────────────────────────────────────────────────────────
-  used     2.84M · 49–66% of the wall
-  ceiling  4.25M to 5.75M, from 1 recorded wall
-  burn     1.31M/h over 2h10m of this block
-
-  claude-opus-5     █████████████░░░░░   2.10M   73%
-  claude-sonnet-5   █████░░░░░░░░░░░░░    740k   26%
-
-  3 turns · next turn ~610k
-```
+![The /kairos report: 2.84M used, 49 to 66 percent of the wall, a ceiling of 4.25M to 5.75M from one recorded wall, and the split across models](docs/screenshots/report.svg)
 
 The band narrows as evidence accumulates. One recorded refusal gives a wide
 range; three give a tighter one.
@@ -115,15 +88,7 @@ Kairos keeps them apart. Everything it records is partitioned by account, a
 session follows the account that is actually paying even if you switch part way
 through, and `kairos accounts` shows where each one stands:
 
-![The accounts view](docs/screenshots/accounts.svg)
-
-```text
-  account              used   of wall  window
-────────────────────────────────────────────────────────
-▸ Max 20x (…eea8c8)   2.84M   49–66%   resets in 2h50m
-  Pro (…4f3110)         96k   26–31%   resets in 4h00m
-  Max 5x (…1c0de7)        0   no spend block clear
-```
+![Three accounts side by side: a Max 20x at 49 to 66 percent, a Pro at 26 to 31 percent, and a Max 5x whose block is clear](docs/screenshots/accounts.svg)
 
 A Max 5x and a Max 20x are told apart, because their ceilings differ by roughly
 four times and telling them apart is the point. An account Kairos has not seen
