@@ -103,7 +103,7 @@ coverage. If an assertion cannot be made to fail without becoming flaky, say so
 in a comment instead: there is one of those in `tests/run.sh` already, and it
 explains itself.
 
-**Do not make the meter guess.** kairos reports a range for the ceiling because
+**Do not make the meter guess.** Kairos reports a range for the ceiling because
 it does not know the ceiling, and reports nothing at all for an account it has
 never seen refused. If you find yourself adding a plausible default so the
 output looks more confident, that is the mistake this design was built to
