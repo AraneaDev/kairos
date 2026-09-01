@@ -1122,6 +1122,19 @@ kairos_record_turn "$acct" s1 920000
 line=$(kairos_summary_line "$acct")
 contains "the summary reports the total" "1.42M" "$line"
 contains "the summary counts the turns" "2 turns" "$line"
+
+# An uncalibrated account has no window fraction to report. Printing zero
+# percent on the way out of a session would say the opposite of what happened.
+contains "an uncalibrated summary reports no ceiling" "no ceiling recorded yet" "$line"
+case "$line" in
+  *"% of the window"*) fail "an uncalibrated summary shows no percentage" "no percentage" "$line" ;;
+  *) pass "an uncalibrated summary shows no percentage" ;;
+esac
+
+# One turn is a turn.
+: > "$part/turns.tsv"
+kairos_record_turn "$acct" s1 500000
+contains "a single turn is described in the singular" "over 1 turn," "$(kairos_summary_line "$acct")"
 teardown_env
 
 echo

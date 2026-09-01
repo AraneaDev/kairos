@@ -84,8 +84,13 @@ EOF
 
   if [ -s "$kairos_rpart/turns.tsv" ]; then
     kairos_rturns=$(wc -l < "$kairos_rpart/turns.tsv" | tr -d ' ')
-    printf '  %s turns recorded · next turn estimated at %s\n' \
-      "$kairos_rturns" "$(kairos_human "$(kairos_predict "$kairos_ruuid" unknown)")"
+    if [ "$kairos_rturns" = "1" ]; then
+      kairos_rword="turn"
+    else
+      kairos_rword="turns"
+    fi
+    printf '  %s %s recorded · next turn estimated at %s\n' \
+      "$kairos_rturns" "$kairos_rword" "$(kairos_human "$(kairos_predict "$kairos_ruuid" unknown)")"
   fi
 }
 
@@ -168,8 +173,21 @@ EOF
   if [ -f "$kairos_spart/turns.tsv" ]; then
     kairos_sturns=$(wc -l < "$kairos_spart/turns.tsv" | tr -d ' ')
   fi
-  printf 'kairos: %s billable over %s turns, %s–%s%% of the window.\n' \
-    "$(kairos_human "$kairos_sused")" "$kairos_sturns" \
-    "$(kairos_pct "$kairos_sused" "$kairos_shigh")" \
-    "$(kairos_pct "$kairos_sused" "$kairos_slow")"
+  if [ "$kairos_sturns" = "1" ]; then
+    kairos_sword="turn"
+  else
+    kairos_sword="turns"
+  fi
+  # Without a recorded wall there is no window fraction to report, and printing
+  # "0 to 0 percent" here would tell the reader they spent nothing on the way
+  # out of a session where they spent plenty.
+  if [ "${kairos_sconf:-0}" -eq 0 ]; then
+    printf 'kairos: %s billable over %s %s, no ceiling recorded yet.\n' \
+      "$(kairos_human "$kairos_sused")" "$kairos_sturns" "$kairos_sword"
+  else
+    printf 'kairos: %s billable over %s %s, %s–%s%% of the window.\n' \
+      "$(kairos_human "$kairos_sused")" "$kairos_sturns" "$kairos_sword" \
+      "$(kairos_pct "$kairos_sused" "$kairos_shigh")" \
+      "$(kairos_pct "$kairos_sused" "$kairos_slow")"
+  fi
 }
