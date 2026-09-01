@@ -41,7 +41,8 @@ jobs:
       - uses: actions/checkout@v7
       - name: Syntax check
         run: |
-          for f in hooks/scripts/*.sh hooks/scripts/lib/*.sh tools/*.sh tests/run.sh; do
+          for f in hooks/scripts/*.sh hooks/scripts/lib/*.sh tools/*.sh tests/run.sh \
+                   .githooks/pre-commit .githooks/pre-push; do
             [ -f "$f" ] || continue
             bash -n "$f"
           done
@@ -51,7 +52,8 @@ jobs:
             --enable=deprecate-which \
             --enable=avoid-nullary-conditions \
             --enable=quote-safe-variables \
-            hooks/scripts/*.sh hooks/scripts/lib/*.sh tools/*.sh tests/run.sh
+            hooks/scripts/*.sh hooks/scripts/lib/*.sh tools/*.sh tests/run.sh \
+            .githooks/pre-commit .githooks/pre-push
 
   manifests:
     runs-on: ubuntu-latest
@@ -61,7 +63,8 @@ jobs:
         run: command -v jq >/dev/null || (sudo apt-get update && sudo apt-get install -y jq)
       - name: Validate JSON
         run: |
-          for f in .claude-plugin/plugin.json hooks/hooks.json; do
+          for f in .claude-plugin/plugin.json hooks/hooks.json \
+                   release-please-config.json .release-please-manifest.json; do
             jq -e . "$f" > /dev/null && echo "$f ok"
           done
       - name: Hook commands point at files that exist

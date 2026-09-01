@@ -187,9 +187,34 @@ a factor of a hundred.
 
 ## Development
 
-`bash tests/run.sh` runs the suite. No framework, no dependencies beyond `jq`.
-`bash tools/check-docs.sh` holds this README to the code. See
-[CONTRIBUTING.md](CONTRIBUTING.md).
+`bash tests/run.sh` runs the suite. No framework, no dependency beyond `jq`.
+`bash tools/check-docs.sh` holds this README to the code, and fails the build
+when a setting, a subcommand or the test count drifts from it.
+
+CI runs the suite on Linux, macOS and Windows, and again under bash 3.2 on
+macOS. Two defects in this repository's history were reachable only on Windows,
+so that column is not decoration.
+
+See [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## Releases
+
+Versioned with [semantic versioning](https://semver.org) and released by
+[release-please](https://github.com/googleapis/release-please), which reads the
+commit messages. Commits follow
+[conventional commits](https://www.conventionalcommits.org): `feat:`, `fix:`,
+`docs:`, `test:`, `ci:`, `refactor:`, `chore:`.
+
+While the version is below `1.0.0`, a feature bumps the patch number and a
+breaking change bumps the minor one, so the shape of the settings can still
+settle without spending major versions on it.
+
+Merging the Release PR tags the release as `v<version>` and updates
+`plugin.json`, `version.txt`, the release manifest and the changelog together.
+The release workflow then re-runs the suite against the released commit and
+checks the tag matches what it released.
+
+Versions and tags are not hand-edited. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
