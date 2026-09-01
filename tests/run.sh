@@ -1016,5 +1016,34 @@ contains "the summary reports the total" "1.42M" "$line"
 contains "the summary counts the turns" "2 turns" "$line"
 teardown_env
 
+echo
+echo "hooks/session-end.sh"
+setup_env
+# shellcheck source=/dev/null
+. "$LIB/common.sh"
+# shellcheck source=/dev/null
+. "$LIB/account.sh"
+
+acct="aaaaaaaa-1111-2222-3333-444444444444"
+part=$(kairos_partition "$acct")
+kairos_account_record "$acct"
+
+# Nothing spent means nothing to say, and never a non-zero exit.
+out=$(echo '{}' | bash "$ROOT/hooks/scripts/session-end.sh" 2>&1)
+is "an empty session ends quietly" "0" "$?"
+is "and says nothing at all" "" "$out"
+
+# With spending recorded, the closing line reports it.
+endnow=$(kairos_now)
+printf '%s\t%s\ts1\tm\t1420000\n' "$endnow" "$acct" > "$part/ledger.tsv"
+printf '%s\ts1\t500000\n%s\ts1\t920000\n' "$endnow" "$endnow" > "$part/turns.tsv"
+out=$(echo '{}' | bash "$ROOT/hooks/scripts/session-end.sh" 2>&1)
+contains "the closing line reports what was spent" "1.42M billable" "$out"
+contains "and how many turns it took" "2 turns" "$out"
+
+is "session end always exits zero" "0" \
+  "$(rm -f "$KAIROS_CLAUDE_JSON"; echo 'not json' | bash "$ROOT/hooks/scripts/session-end.sh" >/dev/null 2>&1; echo $?)"
+teardown_env
+
 printf '\n%s passed, %s failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

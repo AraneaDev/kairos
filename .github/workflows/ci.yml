@@ -72,3 +72,14 @@ jobs:
             if [ -f "$path" ]; then echo "ok   $path"; else echo "MISSING $path"; status=1; fi
           done < <(jq -r '.hooks[][].hooks[].command | scan("\\$CLAUDE_PLUGIN_ROOT/[^\"]+")' hooks/hooks.json)
           exit $status
+
+  docs:
+    # The README goes stale silently: a setting gets added and never written
+    # down, a count stops matching. All cheap to check.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install jq
+        run: command -v jq >/dev/null || (sudo apt-get update && sudo apt-get install -y jq)
+      - name: Check the README against the code
+        run: bash tools/check-docs.sh
