@@ -37,7 +37,7 @@ You've hit your session limit · resets 1:20pm (Europe/Amsterdam)
 
 kairos watches how much of the window you have spent, predicts what your next
 turn will cost, and stops the prompt before that turn takes you through the
-wall. When it stops you it asks what to do rather than deciding for you.
+wall. When it stops you it asks what to do, and leaves the choice with you.
 
 ```text
 kairos: predicted ~95k. 210k left before the optimistic wall,
@@ -109,13 +109,12 @@ active Max 20x (…eea8c8)    2.84M used · 53–72% · resets in 2h55m · band 
 
 A Max 5x and a Max 20x are told apart, because their ceilings differ by roughly
 four times and telling them apart is the point. An account kairos has not seen
-refused yet says so in place of a percentage, rather than showing a figure it
-cannot support.
+refused yet says so in place of a percentage it cannot support.
 
 ## Requirements
 
 `bash` and `jq`. That is the whole list. If `jq` is missing kairos says so once
-and then does nothing, rather than failing quietly.
+and then does nothing. It never fails quietly.
 
 ```text
 macOS           brew install jq
@@ -196,9 +195,9 @@ from transcript timestamps reproduces the reset times Claude's own refusals
 state, to the minute.
 
 Consumption counts `input_tokens + cache_creation_input_tokens + output_tokens`.
-Cache reads are excluded, which was measured rather than assumed: weighting
-them at zero fits the recorded refusals, and including them at any weight makes
-the error four times worse. A meter that counted them would be wrong by roughly
+Cache reads are excluded, and that came out of measurement. Weighting them at
+zero fits the recorded refusals, and including them at any weight makes the
+error four times worse. A meter that counted them would be wrong by roughly
 a factor of a hundred.
 
 ## Development
