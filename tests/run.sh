@@ -925,5 +925,55 @@ is "an unreadable state passes the prompt" "0" \
   "$(printf '%s' "$prompt" | bash "$ROOT/hooks/scripts/user-prompt-submit.sh" >/dev/null 2>&1; echo $?)"
 teardown_env
 
+echo
+echo "lib/waiter.sh"
+setup_env
+# shellcheck source=/dev/null
+. "$LIB/common.sh"
+# shellcheck source=/dev/null
+. "$LIB/account.sh"
+# shellcheck source=/dev/null
+. "$LIB/meter.sh"
+# shellcheck source=/dev/null
+. "$LIB/waiter.sh"
+
+acct="aaaaaaaa-1111-2222-3333-444444444444"
+part=$(kairos_partition "$acct")
+printf 'do the thing' > "$part/stash"
+now=$(kairos_now)
+
+kairos_waiter_arm "$acct" "$((now + 3600))"
+is "arming records the wake time" "$((now + 3600))" "$(cat "$part/waiter.wake")"
+refutes "a waiter that has not fired is not ready" kairos_waiter_ready "$acct"
+
+# Firing is the body the detached process runs, called directly so the test
+# never has to sleep.
+KAIROS_NOTIFY_CMD="touch $KAIROS_TESTDIR/notified" kairos_waiter_fire "$acct"
+is "firing runs the notify command" "yes" "$([ -f "$KAIROS_TESTDIR/notified" ] && echo yes || echo no)"
+asserts "a fired waiter with a stash is ready" kairos_waiter_ready "$acct"
+
+kairos_waiter_clear "$acct"
+refutes "clearing makes it not ready" kairos_waiter_ready "$acct"
+is "clearing removes the wake file" "no" "$([ -f "$part/waiter.wake" ] && echo yes || echo no)"
+
+# A reboot leaves a wake file behind with no process. The clock, not the file,
+# decides whether that wait actually completed.
+printf 'do the thing' > "$part/stash"
+printf '%s\n' "$((now - 10))" > "$part/waiter.wake"
+printf '999999\n' > "$part/waiter.pid"
+: > "$part/waiter.fired"
+asserts "a stale waiter past its wake time counts as fired" kairos_waiter_ready "$acct"
+
+printf '%s\n' "$((now + 999))" > "$part/waiter.wake"
+refutes "a stale waiter before its wake time does not" kairos_waiter_ready "$acct"
+
+# Session start surfaces the stash so the model can offer it back.
+rm -f "$part/waiter.pid"
+printf '%s\n' "$((now - 10))" > "$part/waiter.wake"
+out=$(echo '{"session_id":"sW"}' | bash "$ROOT/hooks/scripts/session-start.sh" 2>/dev/null)
+contains "session start surfaces the stashed prompt" "do the thing" "$out"
+contains "and says what to do with it" "resume" "$out"
+teardown_env
+
 printf '\n%s passed, %s failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

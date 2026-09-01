@@ -13,6 +13,8 @@ kairos_config_load
 . "$KAIROS_DIR/lib/meter.sh"
 # shellcheck source=/dev/null
 . "$KAIROS_DIR/lib/wall.sh"
+# shellcheck source=/dev/null
+. "$KAIROS_DIR/lib/waiter.sh"
 
 payload=$(cat 2>/dev/null || true)
 session=""
@@ -24,6 +26,7 @@ session=$(kairos_safe_id "$session")
 
 uuid=$(kairos_active_account) || true
 kairos_account_record "$uuid"
+part_for_session=$(kairos_partition "$uuid")
 
 kairos_ensure_dir "$KAIROS_HOME/sessions" || exit 0
 printf '%s\n' "$uuid" > "$KAIROS_HOME/sessions/$session"
@@ -42,4 +45,16 @@ find "$(kairos_partition "$uuid")" -name 'turn.start.claimed.*' -mmin +60 \
 kairos_refresh "$uuid"
 kairos_prune "$uuid"
 kairos_harvest_walls "$uuid"
+# A waiter that has come due means there is a prompt to offer back. This goes to
+# stdout, which SessionStart adds to the model's context, so the model can ask
+# rather than silently resuming something the user may no longer want.
+if kairos_waiter_ready "$uuid"; then
+  stash=$(cat "$part_for_session/stash" 2>/dev/null)
+  if [ -n "$stash" ]; then
+    printf 'kairos: the usage window has reset. A prompt was held back before it:\n'
+    printf '%s\n' "$stash"
+    printf 'Ask the user whether to resume it now. If they decline, run: kairos stop\n'
+  fi
+  kairos_waiter_clear "$uuid"
+fi
 exit 0

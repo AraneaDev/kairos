@@ -7,7 +7,7 @@ LIBDIR="$KAIROS_ROOT/hooks/scripts/lib"
 # shellcheck source=/dev/null
 . "$LIBDIR/common.sh"
 kairos_config_load
-for lib in account meter wall predict format; do
+for lib in account meter wall predict format waiter; do
   # shellcheck source=/dev/null
   . "$LIBDIR/$lib.sh"
 done
@@ -43,6 +43,19 @@ case "${1:-report}" in
     kairos_meta_set "$(kairos_partition "$uuid")" alias "$*"
     printf 'kairos: this account is now called "%s"\n' "$*"
     ;;
+  wait)
+    # shellcheck disable=SC2034  # only wend is used, the rest consume fields
+    read -r wstart wend wused <<EOF
+$(kairos_block "$uuid")
+EOF
+    if [ "$wend" -le "$(kairos_now)" ]; then
+      echo "kairos: the window has already reset, nothing to wait for."
+      exit 0
+    fi
+    kairos_waiter_arm "$uuid" "$wend"
+    printf 'kairos: holding. You will be told in %s, when the window resets.\n' \
+      "$(kairos_duration $((wend - $(kairos_now))))"
+    ;;
   go)
     : > "$(kairos_partition "$uuid")/pass.once"
     echo "kairos: the next prompt goes through, then the gate re-arms."
@@ -53,7 +66,7 @@ case "${1:-report}" in
     ;;
   *)
     printf 'kairos: unknown command "%s"\n' "${1:-}" >&2
-    printf 'usage: kairos [report|accounts|alias <name>|go|stop]\n' >&2
+    printf 'usage: kairos [report|accounts|alias <name>|wait|go|stop]\n' >&2
     exit 1
     ;;
 esac
