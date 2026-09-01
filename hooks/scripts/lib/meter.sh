@@ -60,6 +60,7 @@ kairos_refresh() {
     tail -c "+$((kairos_off + 1))" "$kairos_f" 2>/dev/null \
       | head -c "$((kairos_size - kairos_off))" 2>/dev/null \
       | jq -R -r "$KAIROS_EXTRACT_JQ" 2>/dev/null \
+      | tr -d '\r' \
       | awk -F'\t' -v a="$kairos_ruuid" 'NF == 4 { print $1 "\t" a "\t" $2 "\t" $3 "\t" $4 }' \
       >> "$kairos_rled"
     printf '%s\t%s\n' "$kairos_f" "$kairos_size" >> "$kairos_rnew"

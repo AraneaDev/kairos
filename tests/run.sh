@@ -505,6 +505,28 @@ is "a weekly refusal is not recorded as a five-hour wall" "0" "$(grep -c '178722
 is "the wall records what was consumed" "4000000" "$(awk -F'\t' 'NR==1 {print $2}' "$part/walls.tsv")"
 is "the wall records the stated reset" "1788175200" "$(awk -F'\t' 'NR==1 {print $3}' "$part/walls.tsv")"
 
+# A transcript with CRLF line endings must be read the same as one without.
+#
+# Be honest about what this proves. On Linux and macOS jq absorbs the trailing
+# carriage return as JSON whitespace, so this passes with or without the
+# stripping in wall.sh and cannot fail here. It earns its place on Windows,
+# where something in the toolchain does let a CR reach the reset field and turn
+# it into an arithmetic error rather than a wrong number. CI is the only place
+# this assertion has teeth.
+crlfacct="cccc-crlf"
+crlfpart=$(kairos_partition "$crlfacct")
+kairos_meta_set "$crlfpart" first_seen 1
+printf '1788160000\t%s\ts1\tm\t4000000\n' "$crlfacct" > "$crlfpart/ledger.tsv"
+mkdir -p "$KAIROS_PROJECTS_DIR/crlf"
+sed 's/$/\r/' "$ROOT/tests/fixtures/refusal.jsonl" > "$KAIROS_PROJECTS_DIR/crlf/r.jsonl"
+kairos_harvest_walls "$crlfacct" -type f
+is "a CRLF transcript still yields a wall" "1" \
+  "$([ -s "$crlfpart/walls.tsv" ] && wc -l < "$crlfpart/walls.tsv" | tr -d ' ' || echo 0)"
+is "and its reset carries no carriage return" "1788175200" \
+  "$(awk -F'\t' 'NR==1 {print $3}' "$crlfpart/walls.tsv")"
+is "so the band is usable" "3400000	4600000	1" "$(kairos_band "$crlfacct")"
+rm -rf "$KAIROS_PROJECTS_DIR/crlf"
+
 kairos_harvest_walls "$acct"
 is "harvesting twice does not duplicate a wall" "1" "$(wc -l < "$part/walls.tsv" | tr -d ' ')"
 

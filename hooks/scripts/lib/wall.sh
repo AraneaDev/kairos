@@ -37,9 +37,15 @@ kairos_harvest_walls() {
   fi
 
   kairos_wraw="$kairos_wdir/.walls.raw.$$"
+  # Carriage returns are stripped rather than assumed absent. A transcript
+  # written with CRLF leaves one on the last field, and this one is a reset
+  # timestamp that goes straight into arithmetic, where a stray CR is not a
+  # wrong answer but a hard error. Dedup is done here rather than with
+  # sort -u so the pipeline depends on one less external tool.
   find "$KAIROS_PROJECTS_DIR" -name '*.jsonl' "$@" -exec cat {} + 2>/dev/null \
     | jq -R -r "$KAIROS_WALL_JQ" 2>/dev/null \
-    | sort -u -k2,2n > "$kairos_wraw"
+    | tr -d '\r' \
+    | awk -F'\t' 'NF == 2 && !seen[$2]++' > "$kairos_wraw"
 
   while IFS="$(printf '\t')" read -r kairos_whit kairos_wreset; do
     [ -n "$kairos_wreset" ] || continue
