@@ -223,6 +223,33 @@ done
 is "concurrent writers keep every key" "yes" "$metakept"
 is "and write nothing to stderr" "" "$metanoise"
 
+# A writer must never observe the replacement gap as a genuinely empty file.
+# Seeing absence and acting on it would write a meta holding only the key being
+# set, erasing first_seen and with it the record of which refusals may
+# calibrate this account. This holds the gap open deterministically: the lock is
+# taken and meta removed, a writer is started and must block, then meta is
+# restored before the lock is released.
+gappart=$(kairos_partition "llll-gap")
+printf 'first_seen\t12345\norg_type\tclaude_pro\n' > "$gappart/meta"
+mkdir -p "$gappart/meta.lock"
+printf 'someone-else\n' > "$gappart/meta.lock/owner"
+rm -f "$gappart/meta"
+bash "$metaworker" "$KAIROS_HOME" "$gappart" late LATE &
+gapwriter=$!
+sleep 0.3
+printf 'first_seen\t12345\norg_type\tclaude_pro\n' > "$gappart/meta"
+rm -rf "$gappart/meta.lock"
+wait "$gapwriter" 2>/dev/null
+# Both keys must survive together. Asserting only that first_seen is present
+# would not discriminate: without the lock the writer acts on the gap first and
+# the restore below simply overwrites its result, so first_seen reappears for a
+# reason that has nothing to do with the fix. What only serialisation gives is
+# both the pre-existing key and the writer's own key in the same file.
+gapkept=yes
+[ "$(kairos_meta_get "$gappart" first_seen)" = "12345" ] || gapkept=no
+[ "$(kairos_meta_get "$gappart" late)" = "LATE" ] || gapkept=no
+is "a writer waits out the replacement gap instead of reading it as empty" "yes" "$gapkept"
+
 # The fallback path: no readable claude.json at all.
 rm -f "$KAIROS_CLAUDE_JSON"
 is "falls back to a named unknown account" "unknown" "$(kairos_active_account || true)"
