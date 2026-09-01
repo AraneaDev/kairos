@@ -71,12 +71,17 @@ EOF
     else
       printf 'kairos: %s walls calibrating this account.\n' "$used"
     fi
+    # Reflowed to the width every view is drawn to, so the paragraph ends where
+    # the report's rule ends rather than four columns past it.
     if [ "$aside" -gt 0 ]; then
-      printf '        %s unattributed and not used. A refusal is set aside when it\n' "$aside"
-      printf '        predates kairos on this account, so it may belong to another\n'
-      printf '        subscription, or when it is older than the consumption history\n'
-      printf '        and there is nothing left to measure it against.\n'
+      printf '        %s unattributed and not used. A refusal\n' "$aside"
+      printf '        is set aside when it predates kairos on\n'
+      printf '        this account, so it may belong to another\n'
+      printf '        subscription, or when it is older than the\n'
+      printf '        consumption history and there is nothing\n'
+      printf '        left to measure it against.\n'
     fi
+    printf '\n'
     kairos_report "$uuid"
     ;;
   go)

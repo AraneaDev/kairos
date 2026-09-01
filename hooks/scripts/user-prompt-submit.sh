@@ -111,14 +111,17 @@ needed=$((predicted * KAIROS_RESERVE))
 printf '%s' "$prompt" > "$part/stash" 2>/dev/null || true
 
 now=$(kairos_now)
+other=$(kairos_other_clear_account "$uuid")
 {
-  printf 'kairos: predicted ~%s. %s left before the optimistic wall,\n' \
-    "$(kairos_human "$predicted")" "$(kairos_human "$remaining")"
-  printf '        resets in %s.\n\n' "$(kairos_duration $((bend - now)))"
-  other=$(kairos_other_clear_account "$uuid")
+  printf 'kairos: this turn would go through the wall\n'
+  kairos_rule "$KAIROS_WIDTH"
+  printf '  %-8s ~%s predicted\n' next "$(kairos_human "$predicted")"
+  printf '  %-8s %s before the optimistic wall\n' room "$(kairos_human "$remaining")"
+  printf '  %-8s in %s\n' resets "$(kairos_duration $((bend - now)))"
   if [ -n "$other" ]; then
-    printf '  %s block looks clear.\n\n' "$(kairos_account_label "$other")"
+    printf '  %-8s %s has room\n' clear "$(kairos_account_label "$other")"
   fi
+  printf '\n'
   printf '  /kairos wait   hold, and tell me when the window resets\n'
   printf '  /kairos go     send it anyway\n'
   printf '  /kairos stop   drop it\n'

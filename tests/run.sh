@@ -897,6 +897,28 @@ is "thousands" "37k" "$(kairos_human 37000)"
 is "small numbers stay whole" "900" "$(kairos_human 900)"
 is "zero" "0" "$(kairos_human 0)"
 
+# Every view is laid out by counting characters. Counting bytes instead would
+# put the ellipsis in an account label three columns wide and shift everything
+# after it, which is the bug the old fixed-width columns actually had.
+is "a label is measured in characters, not bytes" "17" "$(kairos_width 'Max 20x (…eea8c8)')"
+# Under a UTF-8 locale bash counts characters on its own, so that assertion
+# cannot fail. The C locale is where counting bytes would give 19 and push every
+# column after the label out of line, so the property is pinned there too.
+is "and still in characters under the C locale" "17" "$(LC_ALL=C kairos_width 'Max 20x (…eea8c8)')"
+is "plain text measures the same either way" "5" "$(kairos_width 'plain')"
+is "padding fills out to a column" "Max 20x (…eea8c8)   |" "$(kairos_pad 'Max 20x (…eea8c8)' 20)|"
+is "padding never truncates what it cannot fit" "toolong|" "$(kairos_pad 'toolong' 3)|"
+is "a rule is drawn to a character count" "8" "$(kairos_width "$(kairos_rule 8)")"
+
+# A bar has to be honest at both ends: a model that took the whole block fills
+# it, and one that took almost none of it still has to be visible, because an
+# empty bar beside a real number reads as "never used".
+is "a whole share fills the bar" "██████" "$(kairos_bar 10 10 6)"
+is "no share leaves it empty" "░░░░░░" "$(kairos_bar 0 10 6)"
+is "half a share is half a bar" "███░░░" "$(kairos_bar 5 10 6)"
+is "a share too small to round to a cell still gets one" "█░░░░░" "$(kairos_bar 1 1000 6)"
+is "a share cannot overflow the bar" "██████" "$(kairos_bar 20 10 6)"
+
 is "hours and minutes" "2h41m" "$(kairos_duration 9660)"
 is "minutes only" "41m" "$(kairos_duration 2460)"
 is "seconds only" "9s" "$(kairos_duration 9)"
@@ -941,13 +963,38 @@ is "the burn rate follows what was actually spent" "yes" \
   "$([ -n "$burn1" ] && [ "$burn1" != "$burn2" ] && echo yes || echo no)"
 contains "the report shows the model split" "claude-opus-5" "$report"
 
+# A dated build of a model is the same model. Splitting the share between
+# "claude-haiku-4-5" and "claude-haiku-4-5-20251001" would report one model
+# twice and halve both its bars.
+datedpart=$(kairos_partition "zz-dated")
+printf '1\t4000000\t2\n' > "$datedpart/walls.tsv"
+{
+  printf '%s\tzz-dated\ts1\tclaude-haiku-4-5-20251001\t300000\n' "$(kairos_now)"
+  printf '%s\tzz-dated\ts1\tclaude-haiku-4-5\t100000\n' "$(kairos_now)"
+} > "$datedpart/ledger.tsv"
+datedout=$(kairos_report "zz-dated")
+contains "a dated model id loses its date" "claude-haiku-4-5 " "$datedout"
+case "$datedout" in
+  *20251001*) fail "the date is not shown" "no date suffix" "$datedout" ;;
+  *) pass "the date is not shown" ;;
+esac
+is "two builds of one model are one row" "1" \
+  "$(printf '%s\n' "$datedout" | grep -c 'claude-haiku')"
+is "and their totals are summed" "1" \
+  "$(printf '%s\n' "$datedout" | grep -c 'claude-haiku-4-5 .*400k')"
+
+# The window can begin after every row the ledger holds. A heading over an
+# empty table says the split is unknown when it is simply outside the block.
+is "no model rows are drawn for a block that starts after them" "" \
+  "$(kairos_report_models "$datedpart" "$(($(kairos_now) + 3600))")"
+
 # An account with no recorded refusal has no ceiling, and the report must say
 # so. Printing a percentage here would read as "nothing spent" when the truth
 # is "spent an unknown fraction of an unknown ceiling".
 uncal=$(kairos_partition "zz-uncal")
 printf '%s\tzz-uncal\ts1\tm\t2840000\n' "$(kairos_now)" > "$uncal/ledger.tsv"
 uncalout=$(kairos_report "zz-uncal")
-contains "an uncalibrated account is told there is no ceiling yet" "no ceiling recorded yet" "$uncalout"
+contains "an uncalibrated account is told there is no ceiling yet" "ceiling  none recorded yet" "$uncalout"
 case "$uncalout" in
   *"% of the wall"*) fail "an uncalibrated report shows no percentage" "no percentage" "$uncalout" ;;
   *) pass "an uncalibrated report shows no percentage" ;;
@@ -1002,7 +1049,7 @@ printf '%s\t%s\ts2\tm\t100\n' "$((now - 21600))" "$other" > "$opart/ledger.tsv"
 
 out=$(kairos_accounts_report "$acct")
 contains "lists the active account" "Pro (…444444)" "$out"
-contains "marks which one is active" "active" "$out"
+contains "marks which one is active" "▸ Pro (…444444)" "$out"
 contains "lists the other account" "Max (…555555)" "$out"
 
 is "finds another account whose block has ended" "$other" "$(kairos_other_clear_account "$acct")"
@@ -1047,7 +1094,20 @@ is "and the owner can release its own" "no" "$([ -d "$lockpart/lock" ] && echo y
 viewpart=$(kairos_partition "jjjj-view")
 printf '%s\tjjjj-view\ts1\tm\t900000\n' "$(kairos_now)" > "$viewpart/ledger.tsv"
 viewout=$(kairos_accounts_report "jjjj-view")
-contains "the accounts view says when there is no ceiling" "no ceiling recorded yet" "$viewout"
+contains "the accounts view says when there is no ceiling" "no wall" "$viewout"
+
+# An account whose block is clear spent nothing in it. There is no fraction to
+# report, and "0-0%" would read as a measurement that came back zero rather
+# than as nothing having been measured.
+idlepart=$(kairos_partition "jjjj-idle")
+printf '1\t4000000\t2\n' > "$idlepart/walls.tsv"
+printf '1\tjjjj-idle\ts1\tm\t500000\n' > "$idlepart/ledger.tsv"
+idleout=$(kairos_accounts_report "jjjj-idle")
+contains "a clear block reports no fraction at all" "no spend" "$idleout"
+case "$idleout" in
+  *"0–0%"*) fail "a clear block is not reported as zero percent" "no 0-0%" "$idleout" ;;
+  *) pass "a clear block is not reported as zero percent" ;;
+esac
 case "$viewout" in
   *"jjjj"*"%"*) fail "the accounts view shows no percentage without a wall" "no percentage" "$viewout" ;;
   *) pass "the accounts view shows no percentage without a wall" ;;
