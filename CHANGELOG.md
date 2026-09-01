@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.6](https://github.com/AraneaDev/kairos/compare/v0.0.5...v0.0.6) (2026-09-01)
+
+
+### Documentation
+
+* keep another plugin's overlay out of the captures ([#12](https://github.com/AraneaDev/kairos/issues/12)) ([25ceff2](https://github.com/AraneaDev/kairos/commit/25ceff25dd92757e2f443f5b081f3c16ce9fc154))
+
 ## [0.0.5](https://github.com/AraneaDev/kairos/compare/v0.0.4...v0.0.5) (2026-09-01)
 
 
