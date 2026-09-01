@@ -521,6 +521,19 @@ kairos_harvest_walls "$acct"
 is "a wall predating first_seen is not used" "0" "$([ -s "$part/walls.tsv" ] && wc -l < "$part/walls.tsv" | tr -d ' ' || echo 0)"
 is "but it is kept aside" "1" "$(wc -l < "$part/walls.unattributed.tsv" | tr -d ' ')"
 
+# A refusal older than the consumption history has nothing left to measure it
+# against. Recording it as a ceiling of zero would be a fact kairos invented,
+# so it is set aside the same way an unattributable one is.
+nomeasure="gggg-nomeasure"
+npart=$(kairos_partition "$nomeasure")
+kairos_meta_set "$npart" first_seen 1
+: > "$npart/ledger.tsv"
+kairos_harvest_walls "$nomeasure"
+is "a wall with no history to measure is not calibrated from" "0" \
+  "$([ -s "$npart/walls.tsv" ] && wc -l < "$npart/walls.tsv" | tr -d ' ' || echo 0)"
+is "and is kept aside instead" "1" "$(wc -l < "$npart/walls.unattributed.tsv" | tr -d ' ')"
+is "so it cannot drag the band to zero" "0	0	0" "$(kairos_band "$nomeasure")"
+
 # A malformed row must not be able to move the band or count toward
 # confidence. A zero low edge with confidence above zero is a band the gate
 # would act on, derived from a row that says nothing.
@@ -539,10 +552,13 @@ fpart=$(kairos_partition "$fresh")
 kairos_harvest_walls "$fresh"
 is "with no first_seen, nothing is attributable" "0" "$([ -s "$fpart/walls.tsv" ] && wc -l < "$fpart/walls.tsv" | tr -d ' ' || echo 0)"
 
-# A wall landing in the same second as first_seen belongs to this account.
+# A wall landing in the same second as first_seen belongs to this account. It
+# needs consumption inside its window too, because a wall with nothing left to
+# measure it against is set aside rather than believed.
 seen="ffff-exact"
 spart=$(kairos_partition "$seen")
 kairos_meta_set "$spart" first_seen 1788172097
+printf '1788160000\t%s\ts1\tm\t3000000\n' "$seen" > "$spart/ledger.tsv"
 kairos_harvest_walls "$seen"
 is "a wall exactly at first_seen is attributed" "1" "$(wc -l < "$spart/walls.tsv" | tr -d ' ')"
 teardown_env
@@ -896,6 +912,12 @@ is "finds another account whose block has ended" "$other" "$(kairos_other_clear_
 # An account still inside its own block is not offered as clear.
 printf '%s\t%s\ts2\tm\t100\n' "$((now - 100))" "$other" > "$opart/ledger.tsv"
 is "an account still inside its block is not offered" "" "$(kairos_other_clear_account "$acct")"
+
+# An account kairos has never metered is unknown, not clear. Offering a switch
+# to it would be a guess presented as a fact.
+ghost=$(kairos_partition "hhhh-neverseen")
+kairos_meta_set "$ghost" org_type claude_pro
+is "an unmetered account is never advertised as clear" "" "$(kairos_other_clear_account "$acct")"
 
 bash "$ROOT/tools/kairos.sh" alias "work laptop" >/dev/null 2>&1
 is "the alias is stored" "work laptop" "$(kairos_meta_get "$KAIROS_HOME/accounts/$acct" alias)"

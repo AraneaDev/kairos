@@ -58,7 +58,14 @@ kairos_harvest_walls() {
     fi
     # A wall from before this account was first seen may belong to a different
     # subscription entirely. Kept, reported, never used to calibrate.
-    if [ "$kairos_whit" -lt "$kairos_wseen" ]; then
+    #
+    # A wall whose consumption comes out as zero is kept the same way. The
+    # ledger only ever covers a day, so any refusal older than that has no
+    # rows left to count and would otherwise be written as a ceiling of zero,
+    # which the band then silently discards. Recording it here keeps calibrate
+    # honest: it can say what it found and what it could not use, instead of
+    # counting rows the band will not.
+    if [ "$kairos_whit" -lt "$kairos_wseen" ] || [ "${kairos_wused:-0}" -le 0 ]; then
       printf '%s\t%s\t%s\n' "$kairos_whit" "$kairos_wused" "$kairos_wreset" >> "$kairos_wunattr"
     else
       printf '%s\t%s\t%s\n' "$kairos_whit" "$kairos_wused" "$kairos_wreset" >> "$kairos_wfile"

@@ -66,11 +66,16 @@ EOF
     [ -f "$part/walls.tsv" ] && used=$(wc -l < "$part/walls.tsv" | tr -d ' ')
     aside=0
     [ -f "$part/walls.unattributed.tsv" ] && aside=$(wc -l < "$part/walls.unattributed.tsv" | tr -d ' ')
-    printf 'kairos: %s wall(s) calibrating this account.\n' "$used"
+    if [ "$used" = "1" ]; then
+      printf 'kairos: 1 wall calibrating this account.\n'
+    else
+      printf 'kairos: %s walls calibrating this account.\n' "$used"
+    fi
     if [ "$aside" -gt 0 ]; then
-      printf '        %s unattributed wall(s) set aside. They predate kairos on this\n' "$aside"
-      printf '        account and may belong to a different subscription, so they are\n'
-      printf '        recorded but not used.\n'
+      printf '        %s unattributed and not used. A refusal is set aside when it\n' "$aside"
+      printf '        predates kairos on this account, so it may belong to another\n'
+      printf '        subscription, or when it is older than the consumption history\n'
+      printf '        and there is nothing left to measure it against.\n'
     fi
     kairos_report "$uuid"
     ;;

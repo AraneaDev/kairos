@@ -14,6 +14,8 @@ kairos_config_load
 # shellcheck source=/dev/null
 . "$KAIROS_DIR/lib/meter.sh"
 # shellcheck source=/dev/null
+. "$KAIROS_DIR/lib/wall.sh"
+# shellcheck source=/dev/null
 . "$KAIROS_DIR/lib/predict.sh"
 
 payload=$(cat 2>/dev/null || true)
@@ -56,6 +58,11 @@ esac
 
 kairos_refresh "$uuid"
 kairos_prune "$uuid"
+# A refusal arrives as an assistant message, so this is the first moment it can
+# be seen. Harvesting only at session start would leave a wall hit mid-session
+# unrecorded until the next one, and if that transcript then went quiet for a
+# day the default scan window would never find it at all.
+kairos_harvest_walls "$uuid"
 
 spent=0
 if [ -f "$part/ledger.tsv" ]; then

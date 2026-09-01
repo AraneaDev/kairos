@@ -138,6 +138,12 @@ kairos_other_clear_account() {
     read -r kairos_ostart kairos_oend kairos_oused <<EOF
 $(kairos_block "$kairos_ouuid")
 EOF
+    # kairos_block reports zeros both for an account whose window has ended and
+    # for one that was never metered at all, so the block alone cannot tell them
+    # apart. The ledger can: an account with no consumption recorded is not
+    # clear, it is unknown, and suggesting a switch to it would be a guess
+    # dressed as a fact.
+    [ -s "$KAIROS_HOME/accounts/$kairos_ouuid/ledger.tsv" ] || continue
     if [ "$kairos_oend" -le "$kairos_onow" ]; then
       printf '%s\n' "$kairos_ouuid"
       return 0
