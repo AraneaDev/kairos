@@ -86,3 +86,17 @@ jobs:
         run: command -v jq >/dev/null || (sudo apt-get update && sudo apt-get install -y jq)
       - name: Check the README against the code
         run: bash tools/check-docs.sh
+
+  screenshots:
+    # The README's images are captures of real Claude Code sessions, and they go
+    # stale the same silent way the prose does. Checking them needs neither
+    # Claude nor a network: the captures are committed, so this re-renders the
+    # images from them and confirms the captures still show what the code
+    # prints. Taking a new capture is a local job, tools/screenshot.sh --capture.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install jq
+        run: command -v jq >/dev/null || (sudo apt-get update && sudo apt-get install -y jq)
+      - name: Check the screenshots against the code
+        run: bash tools/screenshot.sh --check
