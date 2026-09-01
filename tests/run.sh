@@ -739,8 +739,25 @@ printf '%s\t5000000\t%s\n' "$((now - 3600))" "$((now + 3600))" > "$part/walls.ts
 report=$(kairos_report "$acct")
 contains "the report names the account" "Pro (…444444)" "$report"
 contains "the report shows what was used" "1.84M" "$report"
-contains "the report shows a band, not a number" "%" "$report"
-contains "the report shows a burn rate" "burn" "$report"
+# The percentage must be derived from the band, not merely printed. One wall of
+# 4000000 gives a band of 3400000 to 4600000, so 2000000 spent is 43 to 58
+# percent of it.
+pctpart=$(kairos_partition "zz-pct")
+printf '1\t4000000\t2\n' > "$pctpart/walls.tsv"
+printf '%s\tzz-pct\ts1\tm\t2000000\n' "$(kairos_now)" > "$pctpart/ledger.tsv"
+contains "the percentage is derived from the band" "43–58% of the wall" "$(kairos_report "zz-pct")"
+
+# The burn rate must follow what was actually spent. Asserting on the word
+# "burn" alone would pass however wrong the arithmetic was.
+burnpart=$(kairos_partition "zz-burn")
+printf '1\t4000000\t2\n' > "$burnpart/walls.tsv"
+burnnow=$(kairos_now)
+printf '%s\tzz-burn\ts1\tm\t1000000\n' "$((burnnow - 3600))" > "$burnpart/ledger.tsv"
+burn1=$(kairos_report "zz-burn" | awk '/^  burn /{print $2}')
+printf '%s\tzz-burn\ts1\tm\t3000000\n' "$((burnnow - 3600))" > "$burnpart/ledger.tsv"
+burn2=$(kairos_report "zz-burn" | awk '/^  burn /{print $2}')
+is "the burn rate follows what was actually spent" "yes" \
+  "$([ -n "$burn1" ] && [ "$burn1" != "$burn2" ] && echo yes || echo no)"
 contains "the report shows the model split" "claude-opus-5" "$report"
 
 # An account with no recorded refusal has no ceiling, and the report must say
@@ -764,6 +781,12 @@ printf '1\t4000000\t2\n' > "$uncal/walls.tsv"
 contains "a single wall is described in the singular" "1 recorded wall" "$(kairos_report "zz-uncal")"
 printf '1\t4000000\t2\n2\t4200000\t3\n3\t4400000\t4\n' > "$uncal/walls.tsv"
 contains "several walls are described in the plural" "3 recorded walls" "$(kairos_report "zz-uncal")"
+
+# An account kairos has never seen a single ledger row for must not print a
+# reset countdown as if a window had just started. A fresh account id, so it
+# cannot pick up state left by an earlier section.
+contains "an account with no activity says so" "nothing recorded for this account yet" \
+  "$(kairos_report "zz-no-activity")"
 
 out=$(bash "$ROOT/tools/kairos.sh" report 2>/dev/null)
 contains "the CLI prints the report" "Pro (…444444)" "$out"

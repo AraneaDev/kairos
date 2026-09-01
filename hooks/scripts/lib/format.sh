@@ -44,6 +44,10 @@ EOF
   fi
 
   printf '%s\n' "$(kairos_account_label "$kairos_ruuid")"
+  if [ "$kairos_rstart" -eq 0 ]; then
+    printf '  nothing recorded for this account yet\n'
+    return 0
+  fi
   if [ "$kairos_rconf" -eq 1 ]; then
     kairos_rwalls="wall"
   else
