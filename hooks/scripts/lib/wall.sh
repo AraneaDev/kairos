@@ -2,11 +2,62 @@
 # Refusals are the only ground truth about where the wall is, so they are
 # harvested and kept. Everything the band knows comes from here.
 
+# A refusal carries the owner of the transcript it was written in, resolved the
+# same way the meter resolves a usage row: the most recent ownerAccountUuid at
+# or before it, and otherwise by the session it was written under.
+#
+# Emits hit, reset, owner and session; the owner is left empty for the caller
+# to place, because placing it needs the session map.
+# $l is jq's own variable, so this stays single quoted.
+# shellcheck disable=SC2016
 KAIROS_WALL_JQ='
-fromjson?
-| select(.quotaLimits.status == "rejected" and .quotaLimits.rateLimitType == "five_hour")
-| [ (.timestamp | sub("\\.[0-9]+Z$"; "Z") | fromdateiso8601), .quotaLimits.resetsAt ]
-| @tsv'
+foreach (inputs | fromjson? | select(type == "object")) as $l ({o: ""};
+  .o = ($l.ownerAccountUuid // .o)
+  | .r = (try (
+      if ($l.quotaLimits.status == "rejected"
+          and $l.quotaLimits.rateLimitType == "five_hour") then
+        [ ($l.timestamp | sub("\\.[0-9]+Z$"; "Z") | fromdateiso8601),
+          $l.quotaLimits.resetsAt,
+          .o,
+          ($l.sessionId // "") ]
+      else null end) catch null);
+  .r // empty | @tsv)'
+
+# Sets aside walls recorded before attribution existed, once.
+#
+# Until the session map, every refusal in every transcript was credited to
+# whichever account happened to be reading, so on a machine with more than one
+# subscription a recorded wall may belong to either of them. There is no way to
+# tell after the fact which, and a wall is what grants kairos the right to
+# interrupt: one wrong entry is enough to refuse every prompt for a window, and
+# nothing prunes walls.tsv, so it would do that forever.
+#
+# They are moved rather than deleted, and to a file the dedup does not consult,
+# so a rescan re-derives the real ones under the new rules and nothing is lost
+# in the meantime. An account left with no walls does not gate at all, which is
+# the safe direction and exactly what the design asks for: kairos earns the
+# right to interrupt by observing a refusal of its own.
+#
+# A machine with one account was never ambiguous and is left alone.
+kairos_walls_migrate() {
+  kairos_gmark="$KAIROS_HOME/walls.attributed"
+  [ -f "$kairos_gmark" ] && return 0
+  kairos_ensure_dir "$KAIROS_HOME" || return 1
+  kairos_gn=0
+  for kairos_gd in "$KAIROS_HOME"/accounts/*/; do
+    [ -d "$kairos_gd" ] || continue
+    kairos_gn=$((kairos_gn + 1))
+  done
+  if [ "$kairos_gn" -ge 2 ]; then
+    for kairos_gd in "$KAIROS_HOME"/accounts/*/; do
+      [ -s "$kairos_gd/walls.tsv" ] || continue
+      cat "$kairos_gd/walls.tsv" >> "$kairos_gd/walls.superseded.tsv" 2>/dev/null \
+        && rm -f "$kairos_gd/walls.tsv"
+    done
+  fi
+  : > "$kairos_gmark" 2>/dev/null
+  return 0
+}
 
 # Scans transcripts for five-hour refusals and records each as a wall.
 #
@@ -18,6 +69,7 @@ kairos_harvest_walls() {
   shift 2>/dev/null || true
   kairos_have_jq || return 0
   [ -d "$KAIROS_PROJECTS_DIR" ] || return 0
+  kairos_walls_migrate
   kairos_wdir=$(kairos_partition "$kairos_wuuid") || return 0
   kairos_try_lock "$kairos_wdir" || return 0
   kairos_wled="$kairos_wdir/ledger.tsv"
@@ -37,17 +89,61 @@ kairos_harvest_walls() {
   fi
 
   kairos_wraw="$kairos_wdir/.walls.raw.$$"
+  # The session map, written by the meter. awk is given it by name below, and a
+  # name that does not exist is a fatal error there rather than an empty input.
+  kairos_wmap="$KAIROS_HOME/owners.tsv"
+  [ -f "$kairos_wmap" ] || : > "$kairos_wmap" 2>/dev/null
+
   # Carriage returns are stripped rather than assumed absent. A transcript
   # written with CRLF leaves one on the last field, and this one is a reset
   # timestamp that goes straight into arithmetic, where a stray CR is not a
   # wrong answer but a hard error. Dedup is done here rather than with
   # sort -u so the pipeline depends on one less external tool.
-  find "$KAIROS_PROJECTS_DIR" -name '*.jsonl' "$@" -exec cat {} + 2>/dev/null \
-    | jq -R -r "$KAIROS_WALL_JQ" 2>/dev/null \
+  #
+  # One jq per file rather than one over the concatenation, because the owner
+  # has to be carried within a file and must not leak across the boundary
+  # between two.
+  #
+  # A refusal belonging to another account is dropped: it is not this account's
+  # evidence in any sense, and the account that does own it records it when it
+  # next runs.
+  #
+  # A refusal nothing can place is marked orphan and set aside. It is tempting
+  # to credit it to whoever is reading, and that is what the old code did to
+  # every refusal, but a wall is the one thing that grants kairos the right to
+  # interrupt: the same refusal read by two accounts becomes a ceiling for both,
+  # and the smaller plan's ceiling then blocks every prompt on the larger one.
+  #
+  # Two conditions, both required. There has to be ownership information on
+  # this machine at all, or there is nothing to be ambiguous against and no way
+  # a single-account machine would ever calibrate. And there has to be more
+  # than one account, or there is only one candidate and crediting the reader
+  # is simply correct. /kairos calibrate rescans transcripts far older than the
+  # map covers, and on a one-account machine those must still count.
+  kairos_wmulti=0
+  for kairos_wa in "$KAIROS_HOME"/accounts/*/; do
+    [ -d "$kairos_wa" ] || continue
+    kairos_wmulti=$((kairos_wmulti + 1))
+  done
+  [ "$kairos_wmulti" -ge 2 ] || kairos_wmulti=0
+  find "$KAIROS_PROJECTS_DIR" -name '*.jsonl' "$@" 2>/dev/null \
+    | while IFS= read -r kairos_wf; do
+        jq -n -R -r "$KAIROS_WALL_JQ" < "$kairos_wf" 2>/dev/null
+      done \
     | tr -d '\r' \
-    | awk -F'\t' 'NF == 2 && !seen[$2]++' > "$kairos_wraw"
+    | awk -F'\t' -v a="$kairos_wuuid" -v m="$kairos_wmap" -v multi="$kairos_wmulti" '
+        FILENAME == m { own[$1] = $2; mapped = 1; next }
+        NF == 4 {
+          o = $3
+          if (o == "") o = own[$4]
+          if (o == "") { if (mapped && multi) tag = "orphan"; else tag = "own"; o = a }
+          else tag = "own"
+          if (o != a) next
+          if (seen[$2]++) next
+          print $1 "\t" $2 "\t" tag
+        }' "$kairos_wmap" - > "$kairos_wraw"
 
-  while IFS="$(printf '\t')" read -r kairos_whit kairos_wreset; do
+  while IFS="$(printf '\t')" read -r kairos_whit kairos_wreset kairos_wtag; do
     [ -n "$kairos_wreset" ] || continue
     # One wall per reset, however many messages reported it.
     if [ -f "$kairos_wfile" ] && awk -F'\t' -v r="$kairos_wreset" '$3 == r { found = 1 } END { exit !found }' "$kairos_wfile"; then
@@ -71,7 +167,7 @@ kairos_harvest_walls() {
     # which the band then silently discards. Recording it here keeps calibrate
     # honest: it can say what it found and what it could not use, instead of
     # counting rows the band will not.
-    if [ "$kairos_whit" -lt "$kairos_wseen" ] || [ "${kairos_wused:-0}" -le 0 ]; then
+    if [ "$kairos_wtag" = "orphan" ] || [ "$kairos_whit" -lt "$kairos_wseen" ] || [ "${kairos_wused:-0}" -le 0 ]; then
       printf '%s\t%s\t%s\n' "$kairos_whit" "$kairos_wused" "$kairos_wreset" >> "$kairos_wunattr"
     else
       printf '%s\t%s\t%s\n' "$kairos_whit" "$kairos_wused" "$kairos_wreset" >> "$kairos_wfile"

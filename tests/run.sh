@@ -350,13 +350,16 @@ touch -t "$(date -u -d '3 minutes ago' +%Y%m%d%H%M.%S 2>/dev/null || date -u -v-
 if kairos_try_lock "$part"; then pass "stale lock is broken and re-acquired"; else fail "stale lock is broken and re-acquired" "success" "failure"; fi
 kairos_unlock "$part"
 
-# Test kairos_refresh with held lock
-mkdir "$part/lock"
+# The lock that guards the read is the global cursor lock, because the cursor
+# itself is global: what must never happen twice is two readers ingesting the
+# same bytes, and that is not a per-account question.
+mkdir -p "$KAIROS_HOME/cursors.lock"
 kairos_refresh "$acct"
-kairos_held_before=$(wc -l < "$part/ledger.tsv" | tr -d ' ')
+kairos_held_before=$([ -s "$part/ledger.tsv" ] && wc -l < "$part/ledger.tsv" | tr -d ' ' || echo 0)
 kairos_refresh "$acct"
-is "kairos_refresh writes nothing with held lock" "$kairos_held_before" "$(wc -l < "$part/ledger.tsv" | tr -d ' ')"
-kairos_unlock "$part"
+is "kairos_refresh writes nothing with held lock" "$kairos_held_before" \
+  "$([ -s "$part/ledger.tsv" ] && wc -l < "$part/ledger.tsv" | tr -d ' ' || echo 0)"
+rm -rf "$KAIROS_HOME/cursors.lock"
 
 # Test kairos_prune with held lock
 mkdir "$part/lock"
@@ -365,6 +368,15 @@ kairos_prune "$acct"
 kairos_ledger_after=$(wc -l < "$part/ledger.tsv" | tr -d ' ')
 is "kairos_prune with held lock leaves ledger unchanged" "$kairos_ledger_before" "$kairos_ledger_after"
 kairos_unlock "$part"
+
+# A prune must also stand off while a refresh is in flight, because a refresh
+# appends to ledgers without holding their partition lock.
+mkdir -p "$KAIROS_HOME/cursors.lock"
+kairos_ledger_before=$(wc -l < "$part/ledger.tsv" | tr -d ' ')
+KAIROS_LEDGER_WINDOW=1 kairos_prune "$acct"
+is "kairos_prune stands off while the cursor lock is held" "$kairos_ledger_before" \
+  "$(wc -l < "$part/ledger.tsv" | tr -d ' ')"
+rm -rf "$KAIROS_HOME/cursors.lock"
 
 # Concurrency regression: multiple processes calling kairos_refresh should not overcount
 kairos_worker="$KAIROS_TESTDIR/refresh_worker.sh"
@@ -385,8 +397,8 @@ kairos_refresh "$ACCT" 2>/dev/null
 WORKER_SCRIPT
 chmod +x "$kairos_worker"
 
-# Clear ledger for a clean concurrency test
-rm -f "$part/ledger.tsv" "$part/cursors.tsv" "$part/cursors.new."*
+# Clear ledger and the global cursor for a clean concurrency test
+rm -f "$part/ledger.tsv" "$KAIROS_HOME/cursors.tsv" "$KAIROS_HOME/cursors.new."*
 
 # Launch multiple refresh processes
 for kairos_i in 1 2 3 4 5; do
@@ -659,6 +671,228 @@ is "a wall exactly at first_seen is attributed" "1" "$(wc -l < "$spart/walls.tsv
 teardown_env
 
 echo
+echo "account attribution"
+# A transcript is written by whichever account was live at the time, and the
+# meter may be read by a different one. Attribution therefore has to come from
+# the transcript, never from whoever happens to be reading it. Getting this
+# wrong is not a rounding error: it replays one subscription's spending into
+# another's ledger and records one plan's refusal as the other's ceiling.
+setup_env
+# shellcheck source=/dev/null
+. "$LIB/common.sh"
+# shellcheck source=/dev/null
+. "$LIB/account.sh"
+# shellcheck source=/dev/null
+. "$LIB/meter.sh"
+# shellcheck source=/dev/null
+. "$LIB/wall.sh"
+
+acct_a="aaaaaaaa-1111-2222-3333-444444444444"
+acct_b="bbbbbbbb-5555-6666-7777-888888888888"
+apart=$(kairos_partition "$acct_a")
+bpart=$(kairos_partition "$acct_b")
+rows() { [ -s "$1/ledger.tsv" ] && wc -l < "$1/ledger.tsv" | tr -d ' ' || echo 0; }
+
+mkdir -p "$KAIROS_PROJECTS_DIR/proj"
+cp "$ROOT/tests/fixtures/owned.jsonl" "$KAIROS_PROJECTS_DIR/proj/owned.jsonl"
+
+kairos_refresh "$acct_a"
+is "an owned transcript lands in its owner's ledger" "2" "$(rows "$apart")"
+is "and its rows carry the owner, not the reader" "$acct_a" "$(awk -F'\t' 'NR==1 {print $2}' "$apart/ledger.tsv")"
+
+# The regression. /login makes another account live; the transcript itself has
+# not changed by one byte. Before the cursor was shared, this replayed the
+# whole file into the new account, and on a real machine that was 6.8M tokens
+# of one plan's spending landing in the other's ledger.
+kairos_refresh "$acct_b"
+is "switching account does not replay the transcript" "0" "$(rows "$bpart")"
+is "and does not duplicate it for the owner either" "2" "$(rows "$apart")"
+teardown_env
+
+setup_env
+# shellcheck source=/dev/null
+. "$LIB/common.sh"
+# shellcheck source=/dev/null
+. "$LIB/account.sh"
+# shellcheck source=/dev/null
+. "$LIB/meter.sh"
+acct_a="aaaaaaaa-1111-2222-3333-444444444444"
+acct_b="bbbbbbbb-5555-6666-7777-888888888888"
+apart=$(kairos_partition "$acct_a")
+bpart=$(kairos_partition "$acct_b")
+rows() { [ -s "$1/ledger.tsv" ] && wc -l < "$1/ledger.tsv" | tr -d ' ' || echo 0; }
+mkdir -p "$KAIROS_PROJECTS_DIR/proj"
+
+# A session that spans a /login carries two owners, so the file cannot be
+# attributed as a whole. Four transcripts on the machine this was found on had
+# exactly this shape.
+cp "$ROOT/tests/fixtures/owner-switch.jsonl" "$KAIROS_PROJECTS_DIR/proj/switch.jsonl"
+kairos_refresh "$acct_a"
+is "a transcript that changes owner splits at the switch" "1" "$(rows "$apart")"
+is "and the rest goes to the account that took over" "1" "$(rows "$bpart")"
+is "the first turn is the first owner's" "11" "$(awk -F'\t' 'NR==1 {print $5}' "$apart/ledger.tsv")"
+is "the second turn is the second owner's" "22" "$(awk -F'\t' 'NR==1 {print $5}' "$bpart/ledger.tsv")"
+
+# The owner has to survive between refreshes. The marker sits at the top of the
+# file, so once the cursor is past it an incremental read sees no marker at all
+# and would otherwise fall back to whoever is reading.
+printf '%s\n' '{"type":"assistant","sessionId":"s3","timestamp":"2026-08-31T10:03:00.000Z","message":{"model":"claude-opus-5","usage":{"input_tokens":3,"cache_creation_input_tokens":0,"cache_read_input_tokens":500,"output_tokens":30}}}' >> "$KAIROS_PROJECTS_DIR/proj/switch.jsonl"
+kairos_refresh "$acct_a"
+is "an appended turn keeps the owner the cursor remembered" "2" "$(rows "$bpart")"
+is "and is not credited to the account that read it" "1" "$(rows "$apart")"
+
+teardown_env
+
+setup_env
+# shellcheck source=/dev/null
+. "$LIB/common.sh"
+# shellcheck source=/dev/null
+. "$LIB/account.sh"
+# shellcheck source=/dev/null
+. "$LIB/meter.sh"
+acct_a="aaaaaaaa-1111-2222-3333-444444444444"
+acct_b="bbbbbbbb-5555-6666-7777-888888888888"
+apart=$(kairos_partition "$acct_a")
+bpart=$(kairos_partition "$acct_b")
+mkdir -p "$KAIROS_PROJECTS_DIR/proj"
+
+# What a hook saw beats anything reconstructed from the file. A hook fires
+# inside the session that is spending, while the account that pays is live, so
+# the binding it records is observed rather than inferred.
+mkdir -p "$KAIROS_PROJECTS_DIR/proj"
+cp "$ROOT/tests/fixtures/subagent.jsonl" "$KAIROS_PROJECTS_DIR/proj/bound.jsonl"
+asserts "a hook can bind a transcript to an account" \
+  kairos_bind_path "$acct_a" "$KAIROS_PROJECTS_DIR/proj/bound.jsonl"
+kairos_refresh "$acct_b"
+is "a bound transcript goes to the account the hook saw" "77" \
+  "$(awk -F'\t' '$5 == 77 { print $5 }' "$apart/ledger.tsv")"
+is "and not to the account that read it" "0" \
+  "$([ -s "$bpart/ledger.tsv" ] && awk -F'\t' '$5 == 77' "$bpart/ledger.tsv" | wc -l | tr -d ' ' || echo 0)"
+
+# A path is written into a TSV field, so one carrying a tab would bind some
+# other transcript entirely.
+refutes "a path containing a tab is refused" \
+  kairos_bind_path "$acct_a" "$(printf 'a\tb')"
+refutes "an unsafe account id is refused" \
+  kairos_bind_path "../escapee" "$KAIROS_PROJECTS_DIR/proj/bound.jsonl"
+
+# The file's own marker is more precise than a binding, because it can change
+# part way through where a binding names the file as a whole.
+cp "$ROOT/tests/fixtures/owned.jsonl" "$KAIROS_PROJECTS_DIR/proj/marked.jsonl"
+kairos_bind_path "$acct_b" "$KAIROS_PROJECTS_DIR/proj/marked.jsonl"
+kairos_refresh "$acct_b"
+is "a marker in the file still beats the binding" "0" \
+  "$([ -s "$bpart/ledger.tsv" ] && awk -F'\t' '$5 == 1110' "$bpart/ledger.tsv" | wc -l | tr -d ' ' || echo 0)"
+is "and the owner it names gets the rows" "1" \
+  "$(awk -F'\t' '$5 == 1110' "$apart/ledger.tsv" | wc -l | tr -d ' ')"
+teardown_env
+
+setup_env
+# shellcheck source=/dev/null
+. "$LIB/common.sh"
+# shellcheck source=/dev/null
+. "$LIB/account.sh"
+# shellcheck source=/dev/null
+. "$LIB/meter.sh"
+acct_a="aaaaaaaa-1111-2222-3333-444444444444"
+acct_b="bbbbbbbb-5555-6666-7777-888888888888"
+apart=$(kairos_partition "$acct_a")
+bpart=$(kairos_partition "$acct_b")
+rows() { [ -s "$1/ledger.tsv" ] && wc -l < "$1/ledger.tsv" | tr -d ' ' || echo 0; }
+mkdir -p "$KAIROS_PROJECTS_DIR/proj"
+
+# Subagent transcripts are written to a subagents/ directory beside the parent
+# and carry no ownerAccountUuid of their own: 1050 of the 1216 transcripts on
+# the machine this was found on were of that shape, and not one was marked. So
+# the marker alone attributes a small minority of the spending. What they do
+# carry is the parent's session id, and that is what places them.
+mkdir -p "$KAIROS_PROJECTS_DIR/proj/s1/subagents"
+cp "$ROOT/tests/fixtures/owned.jsonl" "$KAIROS_PROJECTS_DIR/proj/s1.jsonl"
+cp "$ROOT/tests/fixtures/subagent.jsonl" "$KAIROS_PROJECTS_DIR/proj/s1/subagents/agent-x.jsonl"
+kairos_refresh "$acct_b"
+is "a subagent transcript follows its parent session's account" "77" \
+  "$(awk -F'\t' '$3 == "s1" && $5 == 77 { print $5 }' "$apart/ledger.tsv")"
+is "and not the account that happened to read it" "0" \
+  "$(awk -F'\t' '$5 == 77' "$bpart/ledger.tsv" | wc -l | tr -d ' ')"
+
+# Not every transcript carries the marker, and a machine with one account must
+# still meter. An unmarked file belongs to whoever is reading it.
+cp "$ROOT/tests/fixtures/usage-basic.jsonl" "$KAIROS_PROJECTS_DIR/proj/plain.jsonl"
+kairos_refresh "$acct_a"
+is "an unmarked transcript falls back to the reading account" "6" "$(rows "$apart")"
+teardown_env
+
+setup_env
+# shellcheck source=/dev/null
+. "$LIB/common.sh"
+# shellcheck source=/dev/null
+. "$LIB/account.sh"
+# shellcheck source=/dev/null
+. "$LIB/meter.sh"
+# shellcheck source=/dev/null
+. "$LIB/wall.sh"
+acct_a="aaaaaaaa-1111-2222-3333-444444444444"
+acct_b="bbbbbbbb-5555-6666-7777-888888888888"
+apart=$(kairos_partition "$acct_a")
+bpart=$(kairos_partition "$acct_b")
+walls() { [ -s "$1/walls.tsv" ] && wc -l < "$1/walls.tsv" | tr -d ' ' || echo 0; }
+kairos_meta_set "$apart" first_seen 1
+kairos_meta_set "$bpart" first_seen 1
+mkdir -p "$KAIROS_PROJECTS_DIR/proj"
+cp "$ROOT/tests/fixtures/refusal-owned.jsonl" "$KAIROS_PROJECTS_DIR/proj/ro.jsonl"
+printf '1788180000\t%s\ts4\tm\t2000000\n' "$acct_a" > "$apart/ledger.tsv"
+printf '1788180000\t%s\ts4\tm\t3000000\n' "$acct_b" > "$bpart/ledger.tsv"
+
+# The refusal that started all this was another plan's, harvested into this
+# one because the scan reads every transcript and stamps it with whoever is
+# live. A wall is what earns kairos the right to interrupt, so attributing one
+# wrongly hands that right to the wrong subscription.
+kairos_harvest_walls "$acct_a"
+is "another account's refusal is not this account's wall" "0" "$(walls "$apart")"
+is "and no band is claimed from it" "0	0	0" "$(kairos_band "$acct_a")"
+
+kairos_harvest_walls "$acct_b"
+is "the account that owns the refusal records it" "1" "$(walls "$bpart")"
+is "and measures it against its own ledger" "3000000" "$(awk -F'\t' 'NR==1 {print $2}' "$bpart/walls.tsv")"
+
+# Walls recorded before any of this existed cannot be trusted on a machine with
+# two subscriptions, and nothing prunes them, so one wrong entry would refuse
+# every prompt for good. They are set aside once, where a rescan can replace
+# them and nothing is thrown away.
+printf '1\t2500000\t1788100000\n' > "$apart/walls.tsv"
+printf '1\t900000\t1788100000\n' > "$bpart/walls.tsv"
+rm -f "$KAIROS_HOME/walls.attributed"
+kairos_walls_migrate
+is "a wall from before attribution is set aside" "0" "$(walls "$apart")"
+is "and kept where it can still be read" "2500000" \
+  "$(awk -F'\t' 'NR==1 {print $2}' "$apart/walls.superseded.tsv")"
+is "the other account is cleared too" "0" "$(walls "$bpart")"
+printf '1\t2500000\t1788100000\n' > "$apart/walls.tsv"
+kairos_walls_migrate
+is "and it only ever runs once" "1" "$(walls "$apart")"
+rm -f "$apart/walls.tsv" "$bpart/walls.tsv" "$apart/walls.superseded.tsv"
+
+# A refusal nobody can place. On a machine whose transcripts do carry owners,
+# an unplaceable one is anomalous, and a wall is the single thing that grants
+# kairos the right to interrupt: handing that right to whoever read the file
+# first is how the same refusal ends up recorded as evidence for two different
+# subscriptions, which is what happened here before the map existed.
+#
+# It is kept and reported, never used to calibrate, which is exactly what
+# walls.unattributed.tsv means.
+rm -f "$apart/walls.tsv" "$bpart/walls.tsv"
+cp "$ROOT/tests/fixtures/refusal.jsonl" "$KAIROS_PROJECTS_DIR/proj/orphan.jsonl"
+printf '1788160000\t%s\ts1\tm\t4000000\n' "$acct_a" >> "$apart/ledger.tsv"
+# Every caller refreshes before it harvests, which is what fills the session
+# map the harvest reads.
+kairos_refresh "$acct_a"
+kairos_harvest_walls "$acct_a"
+is "an unplaceable refusal is not claimed by the reader" "0" "$(walls "$apart")"
+is "but it is kept where calibrate can report it" "1" \
+  "$([ -s "$apart/walls.unattributed.tsv" ] && awk -F'\t' '$3 == 1788175200' "$apart/walls.unattributed.tsv" | wc -l | tr -d ' ' || echo 0)"
+teardown_env
+
+echo
 echo "lib/predict.sh"
 setup_env
 # shellcheck source=/dev/null
@@ -919,6 +1153,33 @@ printf '# a comment\n\nRedraw every view\n' > "$msgfile"
 refutes "and the real subject is still the one judged" \
   bash "$ROOT/tools/check-commit-style.sh" --file "$msgfile"
 rm -f "$msgfile"
+echo "hooks/subagent-stop.sh"
+setup_env
+# shellcheck source=/dev/null
+. "$LIB/common.sh"
+# shellcheck source=/dev/null
+. "$LIB/account.sh"
+
+mkdir -p "$KAIROS_PROJECTS_DIR/p/sess/subagents"
+sub="$KAIROS_PROJECTS_DIR/p/sess/subagents/agent-1.jsonl"
+par="$KAIROS_PROJECTS_DIR/p/sess.jsonl"
+: > "$sub"; : > "$par"
+acct="aaaaaaaa-1111-2222-3333-444444444444"
+
+printf '{"session_id":"sess","transcript_path":"%s","agent_transcript_path":"%s","agent_type":"x"}' \
+  "$par" "$sub" | bash "$ROOT/hooks/scripts/subagent-stop.sh"
+is "the subagent hook exits zero" "0" "$?"
+is "it binds the subagent transcript" "$acct" \
+  "$(awk -F'\t' -v p="$sub" '$1 == p { print $2 }' "$KAIROS_HOME/paths.tsv")"
+is "and the parent transcript too" "$acct" \
+  "$(awk -F'\t' -v p="$par" '$1 == p { print $2 }' "$KAIROS_HOME/paths.tsv")"
+
+# A hook that is handed nothing must still leave cleanly. Every hook here does.
+printf '' | bash "$ROOT/hooks/scripts/subagent-stop.sh"
+is "an empty payload is not an error" "0" "$?"
+printf 'not json at all' | bash "$ROOT/hooks/scripts/subagent-stop.sh"
+is "and neither is a payload that is not json" "0" "$?"
+teardown_env
 
 echo
 echo "lib/format.sh"
@@ -1177,12 +1438,18 @@ mkdir -p "$KAIROS_HOME/sessions"
 printf '%s\n' "$acct" > "$KAIROS_HOME/sessions/sZ"
 prompt='{"session_id":"sZ","prompt":"do the thing"}'
 
+# A refusal no longer announces itself by exiting non-zero, so the exit status
+# cannot tell the two outcomes apart. What separates them is the output: the
+# passing path is silent, because anything it printed would be injected into
+# the model's context and charged for.
+gate() { printf '%s' "$prompt" | bash "$ROOT/hooks/scripts/user-prompt-submit.sh" 2>/dev/null; }
+gate_verdict() { if [ -n "$(gate)" ]; then echo blocked; else echo passed; fi; }
+
 # An account with no recorded refusal must never be gated, however much it has
 # spent, because there is no ceiling to compare against.
 now=$(kairos_now)
 printf '%s\t%s\tsZ\tm\t99000000\n' "$((now - 60))" "$acct" > "$part/ledger.tsv"
-printf '%s' "$prompt" | bash "$ROOT/hooks/scripts/user-prompt-submit.sh" >/dev/null 2>&1
-is "an uncalibrated account is never gated" "0" "$?"
+is "an uncalibrated account is never gated" "passed" "$(gate_verdict)"
 rm -f "$part/turn.start.sZ"
 
 # From here the account has one recorded wall at 5.0M, so a band exists.
@@ -1192,29 +1459,51 @@ printf '%s\t5000000\t%s\n' "$((now - 90000))" "$((now - 86400))" > "$part/walls.
 printf '%s\t%s\tsZ\tm\t1000\n' "$((now - 60))" "$acct" > "$part/ledger.tsv"
 out=$(printf '%s' "$prompt" | bash "$ROOT/hooks/scripts/user-prompt-submit.sh" 2>&1)
 is "a prompt with room passes" "0" "$?"
-is "and prints nothing at all" "" "$out"
+is "and prints nothing at all, so it costs no context" "" "$out"
 is "and marks the turn as started" "yes" "$([ -f "$part/turn.start.sZ" ] && echo yes || echo no)"
 is "the marker names the session" "sZ" "$(awk -F'\t' 'NR==1 {print $2}' "$part/turn.start.sZ")"
 
 # Near the wall: the prompt is refused and the text is kept.
 rm -f "$part/turn.start.sZ"
 printf '%s\t%s\tsZ\tm\t5690000\n' "$((now - 60))" "$acct" > "$part/ledger.tsv"
-out=$(printf '%s' "$prompt" | bash "$ROOT/hooks/scripts/user-prompt-submit.sh" 2>&1)
+out=$(printf '%s' "$prompt" | bash "$ROOT/hooks/scripts/user-prompt-submit.sh" 2>/dev/null)
 rc=$?
-is "a prompt near the wall is refused" "2" "$rc"
-contains "the refusal names the estimate" "predicted" "$out"
-contains "the refusal offers to wait" "/kairos wait" "$out"
-contains "the refusal offers to override" "/kairos go" "$out"
-contains "the refusal offers to drop it" "/kairos stop" "$out"
+# A refusal is stated through the documented contract rather than by exiting 2.
+# suppressOriginalPrompt is only honoured when the decision is "block", and
+# without it Claude Code echoes the prompt back under a message that is already
+# telling you kairos is holding it.
+is "a refusal exits zero and speaks through its output" "0" "$rc"
+is "the decision is a block" "block" "$(printf '%s' "$out" | jq -r '.decision')"
+is "and the original prompt is not echoed back" "true" \
+  "$(printf '%s' "$out" | jq -r '.hookSpecificOutput.suppressOriginalPrompt')"
+is "the output names the event it answers" "UserPromptSubmit" \
+  "$(printf '%s' "$out" | jq -r '.hookSpecificOutput.hookEventName')"
+reason=$(printf '%s' "$out" | jq -r '.reason')
+contains "the refusal names the estimate" "predicted" "$reason"
+contains "the refusal offers to wait" "/kairos wait" "$reason"
+contains "the refusal offers to override" "/kairos go" "$reason"
+contains "the refusal offers to drop it" "/kairos stop" "$reason"
 is "the prompt text is stashed" "do the thing" "$(cat "$part/stash" 2>/dev/null)"
 is "no turn is started when refused" "no" "$([ -f "$part/turn.start.sZ" ] && echo yes || echo no)"
 
-# go overrides exactly once.
-bash "$ROOT/tools/kairos.sh" go >/dev/null 2>&1
-printf '%s' "$prompt" | bash "$ROOT/hooks/scripts/user-prompt-submit.sh" >/dev/null 2>&1
-is "go lets the next prompt through" "0" "$?"
-printf '%s' "$prompt" | bash "$ROOT/hooks/scripts/user-prompt-submit.sh" >/dev/null 2>&1
-is "and the gate re-arms behind it" "2" "$?"
+# go hands the held prompt back rather than asking for it to be typed again.
+goout=$(bash "$ROOT/tools/kairos.sh" go 2>&1)
+contains "go returns the held prompt" "do the thing" "$goout"
+contains "and tells the model to carry it out" "as if the user had just sent it" "$goout"
+is "the stash is spent, so it cannot resume twice" "no" \
+  "$([ -f "$part/stash" ] && echo yes || echo no)"
+# The resumed work happens in the turn that is already running, so there is no
+# next prompt to consume a one-shot pass. Leaving one armed would wave through
+# something unrelated later, silently.
+is "and no override is left armed behind it" "no" \
+  "$([ -f "$part/pass.once" ] && echo yes || echo no)"
+
+# With nothing held, go is still the plain override it always was.
+goout=$(bash "$ROOT/tools/kairos.sh" go 2>&1)
+contains "with nothing held, go arms the override" "next prompt" "$goout"
+is "and that prompt goes through" "passed" "$(gate_verdict)"
+is "and the gate re-arms behind it" "blocked" "$(gate_verdict)"
+is "the refused prompt is stashed again" "do the thing" "$(cat "$part/stash" 2>/dev/null)"
 
 # stop clears the stash.
 bash "$ROOT/tools/kairos.sh" stop >/dev/null 2>&1
@@ -1227,8 +1516,7 @@ is "stop drops the stashed prompt" "no" "$([ -f "$part/stash" ] && echo yes || e
 # other assertion separates the two edges.
 printf '%s\t%s\tsZ\tm\t4500000\n' "$(kairos_now)" "$acct" > "$part/ledger.tsv"
 rm -f "$part/turn.start.sZ" "$part/pass.once"
-printf '%s' "$prompt" | bash "$ROOT/hooks/scripts/user-prompt-submit.sh" >/dev/null 2>&1
-is "the gate measures against the optimistic edge" "0" "$?"
+is "the gate measures against the optimistic edge" "passed" "$(gate_verdict)"
 rm -f "$part/turn.start.sZ"
 
 

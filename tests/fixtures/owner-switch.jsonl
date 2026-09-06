@@ -1,0 +1,4 @@
+{"type":"bridge-session","sessionId":"s3","timestamp":"2026-08-31T10:00:00.000Z","ownerAccountUuid":"aaaaaaaa-1111-2222-3333-444444444444"}
+{"type":"assistant","sessionId":"s3","timestamp":"2026-08-31T10:00:10.000Z","message":{"model":"claude-opus-5","usage":{"input_tokens":1,"cache_creation_input_tokens":0,"cache_read_input_tokens":500,"output_tokens":10}}}
+{"type":"bridge-session","sessionId":"s3","timestamp":"2026-08-31T10:02:00.000Z","ownerAccountUuid":"bbbbbbbb-5555-6666-7777-888888888888"}
+{"type":"assistant","sessionId":"s3","timestamp":"2026-08-31T10:02:10.000Z","message":{"model":"claude-opus-5","usage":{"input_tokens":2,"cache_creation_input_tokens":0,"cache_read_input_tokens":500,"output_tokens":20}}}
