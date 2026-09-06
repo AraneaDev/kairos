@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.0.7](https://github.com/AraneaDev/kairos/compare/v0.0.6...v0.0.7) (2026-09-06)
+
+
+### Features
+
+* warn and recover correctly when two accounts share a machine ([#14](https://github.com/AraneaDev/kairos/issues/14)) ([ed6133f](https://github.com/AraneaDev/kairos/commit/ed6133f8036732523f84abb652c3e02dbbc8091c))
+
+
+### Continuous integration
+
+* check commit subjects and the pull request title against the convention ([#15](https://github.com/AraneaDev/kairos/issues/15)) ([9905438](https://github.com/AraneaDev/kairos/commit/9905438fac1bae4d734fe618cedb59f183cd94a1))
+
 ## [0.0.6](https://github.com/AraneaDev/kairos/compare/v0.0.5...v0.0.6) (2026-09-01)
 
 
