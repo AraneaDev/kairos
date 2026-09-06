@@ -8,7 +8,7 @@
 [![Release](https://img.shields.io/github/v/release/AraneaDev/kairos?label=release&include_prereleases)](https://github.com/AraneaDev/kairos/releases)
 [![Tool page](https://img.shields.io/badge/tool%20page-aranea--development.nl-0b7285)](https://aranea-development.nl/en/tools/kairos)
 [![CI](https://img.shields.io/github/actions/workflow/status/AraneaDev/kairos/ci.yml?label=CI)](https://github.com/AraneaDev/kairos/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/tests-271%20passing-2b8a3e)](tests/run.sh)
+[![Tests](https://img.shields.io/badge/tests-280%20passing-2b8a3e)](tests/run.sh)
 [![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-364fc7)](#requirements)
 [![License](https://img.shields.io/github/license/AraneaDev/kairos?label=license&color=yellow)](./LICENSE)
 [![Language](https://img.shields.io/github/languages/top/AraneaDev/kairos)](https://github.com/AraneaDev/kairos)
@@ -106,6 +106,32 @@ macOS           brew install jq
 Debian/Ubuntu   sudo apt-get install jq
 Windows         winget install jqlang.jq
 ```
+
+### What depends on Claude Code, and how much
+
+Kairos is a Claude Code plugin, so all of it runs on Claude Code's hooks. Some
+parts lean on details of the harness more than others, and it is worth being
+plain about which, because they degrade differently.
+
+| Part | Depends on | Without it |
+| --- | --- | --- |
+| Measuring what you have spent | `message.usage` in the transcripts | Nothing works. There is no other local source. |
+| Telling two accounts apart | `ownerAccountUuid` in the transcripts, and the `transcript_path` on every hook payload | Falls back to the session a transcript was written under, then to the account reading it |
+| Placing subagent spending | `agent_transcript_path` on `SubagentStop` | Falls back the same way. Subagent transcripts state no owner of their own |
+| Not echoing your prompt back at you when the gate refuses it | `suppressOriginalPrompt` in the hook output | The refusal is followed by a copy of the prompt it is holding |
+| Resuming a held prompt | Slash commands feeding their output back to the model | `kairos go` would have to print it for you to send again |
+
+The fallbacks are real fallbacks: on an older Claude Code that writes none of
+the ownership fields, Kairos meters and gates exactly as it did before they
+existed. It is less certain which account a turn belonged to, and it says so by
+refusing to calibrate from a refusal it cannot place.
+
+One limit no fallback covers. Kairos sees only what Claude Code writes to
+`~/.claude/projects`. Turns you spend anywhere else on the same subscription,
+in the desktop app or on the web, come out of the same five-hour window and
+leave nothing on your disk, so they are invisible here and the figures read
+low. If you work across surfaces, treat the report as a floor rather than a
+total.
 
 ## Install
 
@@ -209,7 +235,7 @@ app's WSL sessions, which is Anthropic's limitation rather than this plugin's.
 | `kairos accounts` | Every account Kairos has seen, where each stands, and which is active. |
 | `kairos alias <name>` | Give the active account a name of your own, used in place of the derived label. |
 | `kairos wait` | Hold until the window resets, in a detached process that survives a closed terminal, then ring the terminal that armed it. Set `KAIROS_NOTIFY_CMD` for anything louder. |
-| `kairos go` | Let the next prompt through, and print the one that was held so you can send it again. Spends itself once, then the gate re-arms. |
+| `kairos go` | Resume the prompt that was held, straight away, without you retyping it. With nothing held it lets your next prompt through instead, once. |
 | `kairos stop` | Drop the stashed prompt. |
 | `kairos calibrate` | Rescan every transcript for refusals Kairos has not seen yet, and report what it found. |
 
@@ -277,12 +303,10 @@ for refusals it has not seen yet, which is worth doing once after installing.
 you use more than one plan, the number you are looking at belongs to whichever
 account is active now, and the other one is listed beside it.
 
-Nothing here can break a session. The only deliberate non-zero exit in the
-whole plugin is the gate refusing a prompt; every other path exits 0 and does
-nothing, so a Kairos that is confused goes quiet rather than getting in your
-way. If a prompt
-was ever blocked and you want it back, the text is held and `/kairos go` prints
-it.
+Nothing here can break a session. Every path exits 0 and does nothing, so a
+Kairos that is confused goes quiet rather than getting in your way. A refused
+prompt is held rather than lost, and `/kairos go` picks it up where it stopped
+instead of asking you to type it again.
 
 ## How it works
 

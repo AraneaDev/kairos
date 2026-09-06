@@ -1438,12 +1438,18 @@ mkdir -p "$KAIROS_HOME/sessions"
 printf '%s\n' "$acct" > "$KAIROS_HOME/sessions/sZ"
 prompt='{"session_id":"sZ","prompt":"do the thing"}'
 
+# A refusal no longer announces itself by exiting non-zero, so the exit status
+# cannot tell the two outcomes apart. What separates them is the output: the
+# passing path is silent, because anything it printed would be injected into
+# the model's context and charged for.
+gate() { printf '%s' "$prompt" | bash "$ROOT/hooks/scripts/user-prompt-submit.sh" 2>/dev/null; }
+gate_verdict() { if [ -n "$(gate)" ]; then echo blocked; else echo passed; fi; }
+
 # An account with no recorded refusal must never be gated, however much it has
 # spent, because there is no ceiling to compare against.
 now=$(kairos_now)
 printf '%s\t%s\tsZ\tm\t99000000\n' "$((now - 60))" "$acct" > "$part/ledger.tsv"
-printf '%s' "$prompt" | bash "$ROOT/hooks/scripts/user-prompt-submit.sh" >/dev/null 2>&1
-is "an uncalibrated account is never gated" "0" "$?"
+is "an uncalibrated account is never gated" "passed" "$(gate_verdict)"
 rm -f "$part/turn.start.sZ"
 
 # From here the account has one recorded wall at 5.0M, so a band exists.
@@ -1453,29 +1459,51 @@ printf '%s\t5000000\t%s\n' "$((now - 90000))" "$((now - 86400))" > "$part/walls.
 printf '%s\t%s\tsZ\tm\t1000\n' "$((now - 60))" "$acct" > "$part/ledger.tsv"
 out=$(printf '%s' "$prompt" | bash "$ROOT/hooks/scripts/user-prompt-submit.sh" 2>&1)
 is "a prompt with room passes" "0" "$?"
-is "and prints nothing at all" "" "$out"
+is "and prints nothing at all, so it costs no context" "" "$out"
 is "and marks the turn as started" "yes" "$([ -f "$part/turn.start.sZ" ] && echo yes || echo no)"
 is "the marker names the session" "sZ" "$(awk -F'\t' 'NR==1 {print $2}' "$part/turn.start.sZ")"
 
 # Near the wall: the prompt is refused and the text is kept.
 rm -f "$part/turn.start.sZ"
 printf '%s\t%s\tsZ\tm\t5690000\n' "$((now - 60))" "$acct" > "$part/ledger.tsv"
-out=$(printf '%s' "$prompt" | bash "$ROOT/hooks/scripts/user-prompt-submit.sh" 2>&1)
+out=$(printf '%s' "$prompt" | bash "$ROOT/hooks/scripts/user-prompt-submit.sh" 2>/dev/null)
 rc=$?
-is "a prompt near the wall is refused" "2" "$rc"
-contains "the refusal names the estimate" "predicted" "$out"
-contains "the refusal offers to wait" "/kairos wait" "$out"
-contains "the refusal offers to override" "/kairos go" "$out"
-contains "the refusal offers to drop it" "/kairos stop" "$out"
+# A refusal is stated through the documented contract rather than by exiting 2.
+# suppressOriginalPrompt is only honoured when the decision is "block", and
+# without it Claude Code echoes the prompt back under a message that is already
+# telling you kairos is holding it.
+is "a refusal exits zero and speaks through its output" "0" "$rc"
+is "the decision is a block" "block" "$(printf '%s' "$out" | jq -r '.decision')"
+is "and the original prompt is not echoed back" "true" \
+  "$(printf '%s' "$out" | jq -r '.hookSpecificOutput.suppressOriginalPrompt')"
+is "the output names the event it answers" "UserPromptSubmit" \
+  "$(printf '%s' "$out" | jq -r '.hookSpecificOutput.hookEventName')"
+reason=$(printf '%s' "$out" | jq -r '.reason')
+contains "the refusal names the estimate" "predicted" "$reason"
+contains "the refusal offers to wait" "/kairos wait" "$reason"
+contains "the refusal offers to override" "/kairos go" "$reason"
+contains "the refusal offers to drop it" "/kairos stop" "$reason"
 is "the prompt text is stashed" "do the thing" "$(cat "$part/stash" 2>/dev/null)"
 is "no turn is started when refused" "no" "$([ -f "$part/turn.start.sZ" ] && echo yes || echo no)"
 
-# go overrides exactly once.
-bash "$ROOT/tools/kairos.sh" go >/dev/null 2>&1
-printf '%s' "$prompt" | bash "$ROOT/hooks/scripts/user-prompt-submit.sh" >/dev/null 2>&1
-is "go lets the next prompt through" "0" "$?"
-printf '%s' "$prompt" | bash "$ROOT/hooks/scripts/user-prompt-submit.sh" >/dev/null 2>&1
-is "and the gate re-arms behind it" "2" "$?"
+# go hands the held prompt back rather than asking for it to be typed again.
+goout=$(bash "$ROOT/tools/kairos.sh" go 2>&1)
+contains "go returns the held prompt" "do the thing" "$goout"
+contains "and tells the model to carry it out" "as if the user had just sent it" "$goout"
+is "the stash is spent, so it cannot resume twice" "no" \
+  "$([ -f "$part/stash" ] && echo yes || echo no)"
+# The resumed work happens in the turn that is already running, so there is no
+# next prompt to consume a one-shot pass. Leaving one armed would wave through
+# something unrelated later, silently.
+is "and no override is left armed behind it" "no" \
+  "$([ -f "$part/pass.once" ] && echo yes || echo no)"
+
+# With nothing held, go is still the plain override it always was.
+goout=$(bash "$ROOT/tools/kairos.sh" go 2>&1)
+contains "with nothing held, go arms the override" "next prompt" "$goout"
+is "and that prompt goes through" "passed" "$(gate_verdict)"
+is "and the gate re-arms behind it" "blocked" "$(gate_verdict)"
+is "the refused prompt is stashed again" "do the thing" "$(cat "$part/stash" 2>/dev/null)"
 
 # stop clears the stash.
 bash "$ROOT/tools/kairos.sh" stop >/dev/null 2>&1
@@ -1488,8 +1516,7 @@ is "stop drops the stashed prompt" "no" "$([ -f "$part/stash" ] && echo yes || e
 # other assertion separates the two edges.
 printf '%s\t%s\tsZ\tm\t4500000\n' "$(kairos_now)" "$acct" > "$part/ledger.tsv"
 rm -f "$part/turn.start.sZ" "$part/pass.once"
-printf '%s' "$prompt" | bash "$ROOT/hooks/scripts/user-prompt-submit.sh" >/dev/null 2>&1
-is "the gate measures against the optimistic edge" "0" "$?"
+is "the gate measures against the optimistic edge" "passed" "$(gate_verdict)"
 rm -f "$part/turn.start.sZ"
 
 

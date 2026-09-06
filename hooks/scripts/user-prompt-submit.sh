@@ -114,7 +114,7 @@ printf '%s' "$prompt" > "$part/stash" 2>/dev/null || true
 
 now=$(kairos_now)
 other=$(kairos_other_clear_account "$uuid")
-{
+refusal=$({
   printf 'kairos: this turn would go through the wall\n'
   kairos_rule "$KAIROS_WIDTH"
   printf '  %-8s ~%s predicted\n' next "$(kairos_human "$predicted")"
@@ -124,11 +124,40 @@ other=$(kairos_other_clear_account "$uuid")
     printf '  %-8s %s has room\n' clear "$(kairos_account_label "$other")"
   fi
   printf '\n'
-  printf '  /kairos wait   hold, and tell me when the window resets\n'
-  printf '  /kairos go     send it anyway\n'
+  printf '  /kairos wait   hold it, and pick it up when the window resets\n'
+  printf '  /kairos go     send it now anyway\n'
   printf '  /kairos stop   drop it\n'
   if [ -n "$other" ]; then
     printf '  → to switch, run /login yourself\n'
   fi
-} >&2
+})
+
+# Stated through the documented output contract rather than by exiting 2.
+#
+# The reason for the change is suppressOriginalPrompt, which Claude Code
+# honours only when the decision is "block". Without it the refusal is followed
+# by the prompt itself, echoed back under a message whose whole point is that
+# kairos is holding that prompt for you. /kairos go gives it back.
+#
+# Note what this does to the exit status: a refusal now exits 0 like everything
+# else, and the two outcomes are told apart by whether anything was printed.
+# The passing path must therefore stay silent, which it already had to be,
+# since stdout here is injected into the model's context.
+if kairos_decision=$(jq -n --arg reason "$refusal" '{
+      decision: "block",
+      reason: $reason,
+      hookSpecificOutput: {
+        hookEventName: "UserPromptSubmit",
+        suppressOriginalPrompt: true
+      }
+    }' 2>/dev/null) && [ -n "$kairos_decision" ]; then
+  printf '%s\n' "$kairos_decision"
+  exit 0
+fi
+
+# jq is checked for at the top, so this is close to unreachable. It is here
+# because the alternative to a malformed refusal is no refusal at all, and a
+# prompt let through by a broken gate is the one outcome worth writing a
+# fallback for.
+printf '%s\n' "$refusal" >&2
 exit 2
