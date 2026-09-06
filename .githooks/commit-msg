@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# Refuse a commit message release-please cannot read.
+#
+# The changelog and the next version number are built from these subjects, so
+# one without a type does not just read untidily: it misses the changelog, and
+# a fix that should have moved the version leaves it where it was.
+#
+# The rule itself lives in tools/check-commit-style.sh, because CI checks the
+# pull request title against the same rule and two copies would drift.
+#
+# Install by copying into .git/hooks/, the same way pre-commit is installed:
+#   cp .githooks/pre-commit .githooks/pre-push .githooks/commit-msg .git/hooks/
+#
+# Copied rather than reached through core.hooksPath for the reason
+# CONTRIBUTING.md gives: a tracked hook only exists in the working tree while a
+# branch containing it is checked out, so it would be missing on exactly the
+# branches that predate it.
+#
+# Bypass once, deliberately:
+#   git commit --no-verify
+set -euo pipefail
+
+kairos_root="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+kairos_check="$kairos_root/tools/check-commit-style.sh"
+
+# A checkout that predates the script, or a worktree it is missing from, must
+# not be unable to commit. The hook is a guard rail, not a gate.
+[ -f "$kairos_check" ] || exit 0
+
+exec bash "$kairos_check" --file "$1"

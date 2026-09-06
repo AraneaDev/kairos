@@ -877,6 +877,50 @@ is "a long turn still records rather than being swept" "1" \
 teardown_env
 
 echo
+echo "tools/check-commit-style.sh"
+# release-please builds the changelog and the next version from these subjects,
+# so one it cannot parse costs a changelog entry and a version bump, not just
+# tidiness. Three subjects reached main before this existed that it would have
+# stopped.
+style() { bash "$ROOT/tools/check-commit-style.sh" "$1" >/dev/null 2>&1; }
+
+asserts "a plain type passes" style "fix: do not gate on a window that has ended"
+asserts "a scope passes" style "docs(readme): link the project site"
+asserts "a break passes" style "feat!: rename the state directory"
+asserts "a scoped break passes" style "feat(meter)!: one cursor for every account"
+asserts "release-please's own subject passes" style "chore(main): release 0.0.6"
+
+refutes "no type at all is refused" style "Redraw every view, and generate the README screenshots"
+refutes "a capitalised type is refused" style "Fix: do not gate on an ended window"
+refutes "an unknown type is refused" style "improvement: make it nicer"
+refutes "a type with no subject is refused" style "fix:"
+refutes "a missing space after the colon is refused" style "fix:do the thing"
+refutes "a type mentioned mid-sentence is refused" style "this is a fix: honestly"
+
+# CONTRIBUTING.md forbids em dashes in commit messages as well as in code.
+refutes "an em dash is refused" style "fix: hold the prompt — then hand it back"
+asserts "and an en dash in a range is fine" style "fix: cover the 30-50% band"
+
+# Git writes these itself. None of them reach main in a form release-please reads.
+asserts "a merge commit is left alone" style "Merge branch 'main' into topic"
+asserts "a revert is left alone" style "Revert \"feat: add the accounts view\""
+asserts "a fixup is left alone" style "fixup! fix: do the thing"
+
+# An empty message aborts the commit on its own, and saying so twice helps nobody.
+asserts "an empty subject is not this script's business" style ""
+
+# The hook reads a file, and a message being edited carries comments above the
+# subject, so the first line of the file is not always the subject.
+msgfile=$(mktemp "${TMPDIR:-/tmp}/kairos-msg.XXXXXX")
+printf '# please enter a commit message\n\nfeat: add the accounts view\n' > "$msgfile"
+asserts "comments above the subject are skipped" \
+  bash "$ROOT/tools/check-commit-style.sh" --file "$msgfile"
+printf '# a comment\n\nRedraw every view\n' > "$msgfile"
+refutes "and the real subject is still the one judged" \
+  bash "$ROOT/tools/check-commit-style.sh" --file "$msgfile"
+rm -f "$msgfile"
+
+echo
 echo "lib/format.sh"
 setup_env
 # shellcheck source=/dev/null
