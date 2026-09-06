@@ -8,7 +8,7 @@
 [![Release](https://img.shields.io/github/v/release/AraneaDev/kairos?label=release&include_prereleases)](https://github.com/AraneaDev/kairos/releases)
 [![Tool page](https://img.shields.io/badge/tool%20page-aranea--development.nl-0b7285)](https://aranea-development.nl/en/tools/kairos)
 [![CI](https://img.shields.io/github/actions/workflow/status/AraneaDev/kairos/ci.yml?label=CI)](https://github.com/AraneaDev/kairos/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/tests-280%20passing-2b8a3e)](tests/run.sh)
+[![Tests](https://img.shields.io/badge/tests-299%20passing-2b8a3e)](tests/run.sh)
 [![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-364fc7)](#requirements)
 [![License](https://img.shields.io/github/license/AraneaDev/kairos?label=license&color=yellow)](./LICENSE)
 [![Language](https://img.shields.io/github/languages/top/AraneaDev/kairos)](https://github.com/AraneaDev/kairos)

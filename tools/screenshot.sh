@@ -68,6 +68,13 @@ seed_account() {
 }
 
 START=$((NOW - 7680))
+# The fixture stands in for a machine that has been running kairos, so it also
+# stands in for one whose walls were already attributed. Without this marker the
+# one-time migration fires on first harvest, sees three accounts, and moves
+# every seeded wall aside as unattributable, which is correct on a real machine
+# and leaves the fixture with no band for the gate to refuse against.
+: > "$KAIROS_HOME/walls.attributed"
+
 seed_account "$BIG" default_claude_max_20x claude_max
 BPART=$(kairos_partition "$BIG")
 {
