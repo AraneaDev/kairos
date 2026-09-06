@@ -33,6 +33,8 @@ fi
 
 uuid=$(kairos_active_account) || true
 kairos_account_record "$uuid"
+kairos_bind_path "$uuid" \
+  "$(printf '%s' "$payload" | jq -r '.transcript_path // empty' 2>/dev/null)" || true
 part_for_session=$(kairos_partition "$uuid")
 
 kairos_ensure_dir "$KAIROS_HOME/sessions" || exit 0

@@ -8,7 +8,7 @@
 [![Release](https://img.shields.io/github/v/release/AraneaDev/kairos?label=release&include_prereleases)](https://github.com/AraneaDev/kairos/releases)
 [![Tool page](https://img.shields.io/badge/tool%20page-aranea--development.nl-0b7285)](https://aranea-development.nl/en/tools/kairos)
 [![CI](https://img.shields.io/github/actions/workflow/status/AraneaDev/kairos/ci.yml?label=CI)](https://github.com/AraneaDev/kairos/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/tests-254%20passing-2b8a3e)](tests/run.sh)
+[![Tests](https://img.shields.io/badge/tests-271%20passing-2b8a3e)](tests/run.sh)
 [![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-364fc7)](#requirements)
 [![License](https://img.shields.io/github/license/AraneaDev/kairos?label=license&color=yellow)](./LICENSE)
 [![Language](https://img.shields.io/github/languages/top/AraneaDev/kairos)](https://github.com/AraneaDev/kairos)
@@ -286,20 +286,38 @@ it.
 
 ## How it works
 
-Four hooks, all of them harness-only, so none of this costs model context.
+Five hooks, all of them harness-only, so none of this costs model context.
 
 | Hook | Job |
 | --- | --- |
 | `SessionStart` | Resolve the paying account, bind the session to it, bring the meter up to date, harvest any refusals |
 | `UserPromptSubmit` | Follow a mid-session account switch, predict the turn, block or let it through |
 | `Stop` | Record what the turn actually cost, and harvest a refusal if one just happened |
+| `SubagentStop` | Note which account paid for a subagent's transcript |
 | `SessionEnd` | Print the closing line |
 
 Consumption is read incrementally. A cursor per transcript records how many
 bytes have been counted, so a refresh reads only what was appended since, and
-the ledger it writes is pruned to a day. Everything is partitioned by account
-uuid under `~/.claude/kairos/accounts/`, which is also where the recorded
-refusals and the turn history live.
+the ledger it writes is pruned to a day. The cursors are kept in one place
+rather than per account, because the bytes of a transcript must be counted
+once however many accounts you use.
+
+Which account a turn is counted against never comes from whoever happens to be
+reading. In order of preference it comes from the `ownerAccountUuid` Claude
+Code writes through the transcript, which is the only source precise enough to
+place a session that changed hands part way through; from what a hook observed
+while the paying account was live, which is the only source that is not
+reconstructed at all; from the session a subagent transcript was written under,
+since those state no owner and are most of the files on disk; and only then
+from the account doing the reading.
+
+A refusal gets stricter treatment than a turn, because a refusal is the one
+thing that gives kairos permission to interrupt you. On a machine with more
+than one subscription, a refusal that none of the above can place is kept and
+reported but never used to calibrate.
+
+Everything is partitioned by account uuid under `~/.claude/kairos/accounts/`,
+which is also where the recorded refusals and the turn history live.
 
 A turn is opened by the prompt that started it and closed by `Stop`, so its cost
 is measured once rather than accumulated as messages arrive. The marker naming

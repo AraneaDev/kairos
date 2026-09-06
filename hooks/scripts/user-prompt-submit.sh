@@ -64,6 +64,8 @@ if uuid=$(kairos_active_account); then
 else
   uuid=${bound:-unknown}
 fi
+kairos_bind_path "$uuid" \
+  "$(printf '%s' "$payload" | jq -r '.transcript_path // empty' 2>/dev/null)" || true
 part=$(kairos_partition "$uuid") || exit 0
 
 start_turn() {

@@ -113,6 +113,65 @@ kairos_account_record() {
   return 0
 }
 
+# Records that a transcript belongs to an account, on the word of a hook.
+#
+# Every Claude Code hook payload carries transcript_path, and SubagentStop also
+# carries agent_transcript_path. A hook fires inside the session that is
+# spending, while the account paying for it is live, so what it records is
+# observed rather than reconstructed, and it is the only attribution here that
+# is. It matters most for the subagent transcripts, which state no owner of
+# their own and are the bulk of the files on disk.
+#
+# Not authoritative over a marker inside the file, though. A binding names a
+# file as a whole, and a session that spans a /login changes hands part way
+# through, which only the markers can express.
+kairos_bind_path() {
+  kairos_bpacct=$(kairos_safe_id "${1:-}") || return 1
+  kairos_bppath=${2:-}
+  [ -n "$kairos_bppath" ] || return 1
+  # The path becomes the first field of a TSV record. One containing a tab or a
+  # newline would split into two records and bind some unrelated file, so it is
+  # refused rather than trimmed.
+  case "$kairos_bppath" in
+    *"$(printf '\t')"*) return 1 ;;
+    *"
+"*) return 1 ;;
+  esac
+  kairos_ensure_dir "$KAIROS_HOME" || return 1
+  kairos_bpfile="$KAIROS_HOME/paths.tsv"
+
+  # The overwhelmingly common case is a binding that already says this, and it
+  # is worth answering without taking a lock or rewriting the file: these hooks
+  # run on every prompt and every turn.
+  if [ -f "$kairos_bpfile" ] \
+    && [ "$(awk -F'\t' -v p="$kairos_bppath" '$1 == p { print $2; exit }' "$kairos_bpfile" 2>/dev/null)" = "$kairos_bpacct" ]; then
+    return 0
+  fi
+
+  kairos_wait_lock "$KAIROS_HOME" paths.lock || return 1
+  kairos_bptmp="$kairos_bpfile.tmp.$$"
+  if [ -f "$kairos_bpfile" ]; then
+    # Bindings for transcripts that no longer exist are dropped as we pass, so
+    # the file tracks the machine rather than growing for the life of it.
+    if ! awk -F'\t' -v p="$kairos_bppath" '$1 != p && $1 != "" { print }' "$kairos_bpfile" 2>/dev/null \
+      | while IFS="$(printf '\t')" read -r kairos_bpp kairos_bpa; do
+          [ -f "$kairos_bpp" ] && printf '%s\t%s\n' "$kairos_bpp" "$kairos_bpa"
+        done > "$kairos_bptmp"; then
+      rm -f "$kairos_bptmp"
+      kairos_unlock "$KAIROS_HOME" paths.lock
+      return 1
+    fi
+  elif ! : > "$kairos_bptmp"; then
+    rm -f "$kairos_bptmp"
+    kairos_unlock "$KAIROS_HOME" paths.lock
+    return 1
+  fi
+  printf '%s\t%s\n' "$kairos_bppath" "$kairos_bpacct" >> "$kairos_bptmp"
+  mv "$kairos_bptmp" "$kairos_bpfile" 2>/dev/null || rm -f "$kairos_bptmp"
+  kairos_unlock "$KAIROS_HOME" paths.lock
+  return 0
+}
+
 kairos_account_label() {
   kairos_luuid=$(kairos_safe_id "${1:-unknown}")
   kairos_ldir="$KAIROS_HOME/accounts/$kairos_luuid"

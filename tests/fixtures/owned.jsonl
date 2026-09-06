@@ -1,0 +1,3 @@
+{"type":"bridge-session","sessionId":"s1","timestamp":"2026-08-31T10:00:00.000Z","ownerAccountUuid":"aaaaaaaa-1111-2222-3333-444444444444"}
+{"type":"assistant","sessionId":"s1","timestamp":"2026-08-31T10:00:10.000Z","message":{"model":"claude-opus-5","usage":{"input_tokens":10,"cache_creation_input_tokens":100,"cache_read_input_tokens":9999999,"output_tokens":1000}}}
+{"type":"assistant","sessionId":"s1","timestamp":"2026-08-31T10:01:00.500Z","message":{"model":"claude-opus-5","usage":{"input_tokens":5,"cache_creation_input_tokens":50,"cache_read_input_tokens":8888888,"output_tokens":200}}}

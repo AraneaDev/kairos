@@ -25,6 +25,11 @@ if kairos_have_jq && [ -n "$payload" ]; then
 fi
 
 uuid=$(kairos_active_account) || true
+# What this hook was told is the only attribution nothing has to infer: it is
+# firing inside the session that spent the tokens, while the account paying for
+# them is live.
+kairos_bind_path "$uuid" \
+  "$(printf '%s' "$payload" | jq -r '.transcript_path // empty' 2>/dev/null)" || true
 part=$(kairos_partition "$uuid") || exit 0
 session=$(kairos_safe_id "$session")
 marker="$part/turn.start.$session"
