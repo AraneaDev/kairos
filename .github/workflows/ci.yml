@@ -35,6 +35,36 @@ jobs:
         if: runner.os == 'macOS'
         run: /bin/bash tests/run.sh
 
+  commit-style:
+    # release-please reads the subject that lands on main to build the changelog
+    # and choose the next version. This repository squash merges, so that
+    # subject is the pull request title rather than any commit inside the
+    # branch, and the title is what has to be checked. The commits are checked
+    # too, so a branch that is rebased onto main instead is covered as well.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Check the pull request title
+        if: github.event_name == 'pull_request'
+        env:
+          # Through the environment, not interpolated into the script: a title
+          # is attacker controlled text on a public repository.
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: bash tools/check-commit-style.sh "$PR_TITLE"
+      - name: Check every commit on the branch
+        if: github.event_name == 'pull_request'
+        run: |
+          status=0
+          base='${{ github.event.pull_request.base.sha }}'
+          head='${{ github.event.pull_request.head.sha }}'
+          while IFS= read -r subject; do
+            [ -n "$subject" ] || continue
+            bash tools/check-commit-style.sh "$subject" || status=1
+          done < <(git log --format='%s' "$base..$head")
+          exit "$status"
+
   lint:
     runs-on: ubuntu-latest
     steps:
@@ -42,7 +72,7 @@ jobs:
       - name: Syntax check
         run: |
           for f in hooks/scripts/*.sh hooks/scripts/lib/*.sh tools/*.sh tests/run.sh \
-                   .githooks/pre-commit .githooks/pre-push; do
+                   .githooks/pre-commit .githooks/pre-push .githooks/commit-msg; do
             [ -f "$f" ] || continue
             bash -n "$f"
           done
@@ -53,7 +83,7 @@ jobs:
             --enable=avoid-nullary-conditions \
             --enable=quote-safe-variables \
             hooks/scripts/*.sh hooks/scripts/lib/*.sh tools/*.sh tests/run.sh \
-            .githooks/pre-commit .githooks/pre-push
+            .githooks/pre-commit .githooks/pre-push .githooks/commit-msg
 
   manifests:
     runs-on: ubuntu-latest

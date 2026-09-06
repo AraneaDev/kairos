@@ -5,7 +5,7 @@
 ```bash
 git clone https://github.com/AraneaDev/kairos.git
 cd kairos
-cp .githooks/pre-commit .githooks/pre-push .git/hooks/
+cp .githooks/pre-commit .githooks/pre-push .githooks/commit-msg .git/hooks/
 ```
 
 Copy the hooks. Do not point `core.hooksPath` at `.githooks/`: a tracked hook
@@ -91,6 +91,16 @@ marks a break.
 
 No em dashes, in code, comments, output strings or commit messages. A comma or
 two short sentences instead.
+
+Both rules are checked rather than trusted. `tools/check-commit-style.sh` holds
+the one definition; the `commit-msg` hook runs it on what you type, and CI runs
+it on every commit in a pull request.
+
+It also runs on the **pull request title**, which is the one that matters most:
+this repository squash merges, so the title is the subject that reaches `main`
+and the only one `release-please` ever reads. A branch of immaculate commits
+behind a title with no type still lands as a commit with no type. That has
+happened here once already.
 
 ## Releases
 
