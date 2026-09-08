@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.9](https://github.com/AraneaDev/kairos/compare/v0.0.8...v0.0.9) (2026-09-08)
+
+
+### Continuous integration
+
+* scope the concurrency group to the pull request, not the base branch ([#19](https://github.com/AraneaDev/kairos/issues/19)) ([0ebcd09](https://github.com/AraneaDev/kairos/commit/0ebcd099f77a069d080a640c2a47f3139a78a440))
+
 ## [0.0.8](https://github.com/AraneaDev/kairos/compare/v0.0.7...v0.0.8) (2026-09-08)
 
 
