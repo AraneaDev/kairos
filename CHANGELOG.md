@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.0.10](https://github.com/AraneaDev/kairos/compare/v0.0.9...v0.0.10) (2026-09-08)
+
+
+### Continuous integration
+
+* match the release branch by prefix, not by exact name ([#23](https://github.com/AraneaDev/kairos/issues/23)) ([d0e6a1f](https://github.com/AraneaDev/kairos/commit/d0e6a1fd4e306d126725bd7cb76aaede621c822b))
+* skip test-suite steps on release-please pull requests ([#21](https://github.com/AraneaDev/kairos/issues/21)) ([424c5a3](https://github.com/AraneaDev/kairos/commit/424c5a328f076bf5c6ddef3d0f3a9f0428649078))
+
 ## [0.0.9](https://github.com/AraneaDev/kairos/compare/v0.0.8...v0.0.9) (2026-09-08)
 
 
