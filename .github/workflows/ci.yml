@@ -27,7 +27,16 @@ jobs:
         shell: bash
     steps:
       - uses: actions/checkout@v7
+      # A release-please pull request's diff is version files plus a changelog
+      # entry; the code underneath is byte-identical to the main it was cut
+      # from, which already passed this suite. Installing jq and running the
+      # tests here re-verifies code that hasn't changed, so those steps are
+      # skipped on that branch. The job itself still runs and still reports
+      # success, because `test (ubuntu-latest)` and friends are required
+      # checks and a job that never reports would leave the PR permanently
+      # blocked. The guard is keyed on the branch name release-please owns.
       - name: Install jq
+        if: github.head_ref != 'release-please--branches--main'
         run: |
           if command -v jq >/dev/null 2>&1; then
             echo "jq $(jq --version) already present"
@@ -39,9 +48,10 @@ jobs:
             sudo apt-get update && sudo apt-get install -y jq
           fi
       - name: Run tests
+        if: github.head_ref != 'release-please--branches--main'
         run: bash tests/run.sh
       - name: Run tests under bash 3.2
-        if: runner.os == 'macOS'
+        if: runner.os == 'macOS' && github.head_ref != 'release-please--branches--main'
         run: /bin/bash tests/run.sh
 
   commit-style:
