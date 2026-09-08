@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.8](https://github.com/AraneaDev/kairos/compare/v0.0.7...v0.0.8) (2026-09-08)
+
+
+### Continuous integration
+
+* cancel superseded runs and give every job a timeout ([#17](https://github.com/AraneaDev/kairos/issues/17)) ([231a61e](https://github.com/AraneaDev/kairos/commit/231a61e0b27dc262b9157a0b1ea085efef23b20e))
+
 ## [0.0.7](https://github.com/AraneaDev/kairos/compare/v0.0.6...v0.0.7) (2026-09-06)
 
 
