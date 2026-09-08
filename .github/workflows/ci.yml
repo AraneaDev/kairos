@@ -36,7 +36,7 @@ jobs:
       # checks and a job that never reports would leave the PR permanently
       # blocked. The guard is keyed on the branch name release-please owns.
       - name: Install jq
-        if: github.head_ref != 'release-please--branches--main'
+        if: ${{ !startsWith(github.head_ref, 'release-please--branches--') }}
         run: |
           if command -v jq >/dev/null 2>&1; then
             echo "jq $(jq --version) already present"
@@ -48,10 +48,10 @@ jobs:
             sudo apt-get update && sudo apt-get install -y jq
           fi
       - name: Run tests
-        if: github.head_ref != 'release-please--branches--main'
+        if: ${{ !startsWith(github.head_ref, 'release-please--branches--') }}
         run: bash tests/run.sh
       - name: Run tests under bash 3.2
-        if: runner.os == 'macOS' && github.head_ref != 'release-please--branches--main'
+        if: ${{ runner.os == 'macOS' && !startsWith(github.head_ref, 'release-please--branches--') }}
         run: /bin/bash tests/run.sh
 
   commit-style:
