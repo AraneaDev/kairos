@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.11](https://github.com/AraneaDev/kairos/compare/v0.0.10...v0.0.11) (2026-09-15)
+
+
+### Documentation
+
+* **readme:** credit the author and link the write-up ([#24](https://github.com/AraneaDev/kairos/issues/24)) ([da7cc34](https://github.com/AraneaDev/kairos/commit/da7cc347a7057ac16bf7757a1585f0636ba410b0))
+
 ## [0.0.10](https://github.com/AraneaDev/kairos/compare/v0.0.9...v0.0.10) (2026-09-08)
 
 
