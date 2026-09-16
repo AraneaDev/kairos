@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.15](https://github.com/AraneaDev/kairos/compare/v0.0.14...v0.0.15) (2026-09-16)
+
+
+### Continuous integration
+
+* **release:** allow Release Please to be run by hand ([#33](https://github.com/AraneaDev/kairos/issues/33)) ([c51831c](https://github.com/AraneaDev/kairos/commit/c51831c4129adf27ffb5f8fa528b5fc97174e178))
+
 ## [0.0.14](https://github.com/AraneaDev/kairos/compare/v0.0.13...v0.0.14) (2026-09-16)
 
 
