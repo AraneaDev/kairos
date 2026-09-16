@@ -27,6 +27,11 @@ That is the whole problem this solves. A usage limit is only worth knowing about
 before you reach it. Afterwards there is nothing left to take hold of, and the
 five hours you wait are five hours whether you understood them or not.
 
+**TL;DR:** Kairos estimates how much of Claude Code's usage window you have spent and warns
+before a turn is likely to cross the limit. It reconstructs usage from local transcripts, learns
+the ceiling from observed refusals, and gates the prompt in a pre-tool hook so no blocked turn is
+sent.
+
 Claude Code gives no warning before the five-hour usage limit. Work stops
 mid-task, at a moment chosen by the limit rather than by you, and the only
 notice is the failure itself:
