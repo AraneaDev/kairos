@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.0.16](https://github.com/AraneaDev/kairos/compare/v0.0.15...v0.0.16) (2026-09-16)
+
+
+### Fixes
+
+* ignore release configuration changes ([#37](https://github.com/AraneaDev/kairos/issues/37)) ([a2b5bbe](https://github.com/AraneaDev/kairos/commit/a2b5bbeac953636c97fbf068f05261afe6616282))
+
+
+### Documentation
+
+* refresh README and release filters ([#35](https://github.com/AraneaDev/kairos/issues/35)) ([627e16a](https://github.com/AraneaDev/kairos/commit/627e16a2d2a29912c236fff9b1042a1439dedc06))
+
 ## [0.0.15](https://github.com/AraneaDev/kairos/compare/v0.0.14...v0.0.15) (2026-09-16)
 
 
