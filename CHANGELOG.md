@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.14](https://github.com/AraneaDev/kairos/compare/v0.0.13...v0.0.14) (2026-09-16)
+
+
+### Continuous integration
+
+* **pr-title:** check out the base branch, not the pull request's pinned base commit ([#31](https://github.com/AraneaDev/kairos/issues/31)) ([8d35e73](https://github.com/AraneaDev/kairos/commit/8d35e7370645679d688c8536d4cfbcf1ea55fd97))
+
 ## [0.0.13](https://github.com/AraneaDev/kairos/compare/v0.0.12...v0.0.13) (2026-09-16)
 
 
