@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.13](https://github.com/AraneaDev/kairos/compare/v0.0.12...v0.0.13) (2026-09-16)
+
+
+### Continuous integration
+
+* **pr-title:** move the title check to pull_request_target and the house rule ([#29](https://github.com/AraneaDev/kairos/issues/29)) ([c4ebea9](https://github.com/AraneaDev/kairos/commit/c4ebea9c4d70b9c54029b55f495e5e8a265c8f70))
+
 ## [0.0.12](https://github.com/AraneaDev/kairos/compare/v0.0.11...v0.0.12) (2026-09-15)
 
 
