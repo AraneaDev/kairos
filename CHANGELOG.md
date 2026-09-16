@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.0.12](https://github.com/AraneaDev/kairos/compare/v0.0.11...v0.0.12) (2026-09-15)
+
+
+### Continuous integration
+
+* **pr-title:** drop the duplicate Conventional Commit check ([#28](https://github.com/AraneaDev/kairos/issues/28)) ([849c15b](https://github.com/AraneaDev/kairos/commit/849c15b33aaf7f193989ca560993e75146403126))
+* **pr-title:** refuse a pull request title that is not a Conventional Commit ([#26](https://github.com/AraneaDev/kairos/issues/26)) ([906a013](https://github.com/AraneaDev/kairos/commit/906a01332916557c2ad7bda723810a209b6d6113))
+
 ## [0.0.11](https://github.com/AraneaDev/kairos/compare/v0.0.10...v0.0.11) (2026-09-15)
 
 
