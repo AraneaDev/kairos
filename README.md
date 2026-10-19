@@ -6,7 +6,6 @@
 **Kairos stops you before the usage limit does.**
 
 [![Release](https://img.shields.io/github/v/release/AraneaDev/kairos?label=release&include_prereleases)](https://github.com/AraneaDev/kairos/releases)
-[![Tool page](https://img.shields.io/badge/tool%20page-aranea--development.nl-0b7285)](https://aranea-development.nl/en/tools/kairos)
 [![CI](https://img.shields.io/github/actions/workflow/status/AraneaDev/kairos/ci.yml?label=CI)](https://github.com/AraneaDev/kairos/actions/workflows/ci.yml)
 [![Tests](https://img.shields.io/badge/tests-299%20passing-2b8a3e)](tests/run.sh)
 [![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-364fc7)](#requirements)
@@ -14,7 +13,7 @@
 [![Language](https://img.shields.io/github/languages/top/AraneaDev/kairos)](https://github.com/AraneaDev/kairos)
 [![Last commit](https://img.shields.io/github/last-commit/AraneaDev/kairos?label=last%20commit)](https://github.com/AraneaDev/kairos/commits/main)
 [![Conventional Commits](https://img.shields.io/badge/commits-conventional-fe5196?logo=conventionalcommits&logoColor=white)](https://www.conventionalcommits.org/)
-[![Status](https://img.shields.io/badge/status-pre--release-orange)](#install)
+[![Status](https://img.shields.io/badge/status-pre--release-orange)](#load-from-source)
 
 </div>
 
@@ -138,72 +137,28 @@ leave nothing on your disk, so they are invisible here and the figures read
 low. If you work across surfaces, treat the report as a floor rather than a
 total.
 
-## Install
+## Load from source
 
-<!-- aranea-install:start -->
-Install from the Aranea marketplace:
+Kairos is no longer listed on aranea-development.nl or distributed through the
+Aranea marketplace. Its source and releases remain available in this repository.
+Existing installations are not uninstalled by the catalogue change.
 
-```sh
-claude plugin marketplace add https://github.com/AraneaDev/aranea-marketplace
-claude plugin install kairos@aranea
-```
-<!-- aranea-install:end -->
-
-Hooks are bound when a session starts, so start a new session before Kairos
-does anything. An already running session will not pick it up.
-
-### Where it works
-
-This is a Claude Code plugin, and it runs wherever Claude Code itself runs: the
-terminal, the IDE extensions, and the **Code** tab of the desktop app. The
-**Chat** and **Cowork** tabs are not Claude Code and have no hooks, so nothing
-here reaches them. Cloud sessions on the web read hooks from the repository and
-from managed settings rather than from your `~/.claude`, so a personal install
-does not apply there either.
-
-### Windows: WSL and the desktop app are separate installs
-
-Claude Code in WSL and the desktop app on Windows do not share a home
-directory. WSL has `~/.claude`, Windows has `C:\Users\<you>\.claude`. Install
-on one side and the other has nothing installed, and that goes for `jq` and for
-everything Kairos has learned about your accounts, which lives under the same
-home. On macOS and Linux there is one home directory, so one install covers
-everything.
-
-Install on each side you actually use. In WSL, on Debian or Ubuntu:
+To load a local checkout in a Claude Code terminal session:
 
 ```bash
-sudo apt-get install jq
-claude plugin marketplace add https://github.com/AraneaDev/aranea-marketplace
-claude plugin install kairos@aranea
+git clone https://github.com/AraneaDev/kairos.git
+claude --plugin-dir ./kairos
 ```
 
-On Windows:
+From another working directory, pass the absolute path to the checkout instead.
+The flag loads Kairos for that session; use it again when starting a new session.
+See [Claude Code's local plugin documentation](https://code.claude.com/docs/en/plugins)
+for loading plugins without a marketplace.
 
-```powershell
-winget install jqlang.jq
-claude plugin marketplace add https://github.com/AraneaDev/aranea-marketplace
-claude plugin install kairos@aranea
-```
-
-The desktop app's plugin browser lists what your configured marketplaces
-already offer and cannot add one, so the marketplace step is what makes the
-plugin appear there at all. Those commands need the standalone CLI, which is a
-separate installation from the desktop app. Without it, type the same two steps
-as slash commands in a **Local** session in the Code tab:
-
-```text
-/plugin marketplace add https://github.com/AraneaDev/aranea-marketplace
-/plugin install kairos@aranea
-```
-
-Restart the desktop app after installing `jq`. It reads Windows environment
-variables when it launches and never reads your PowerShell profile, so a `PATH`
-that winget changed underneath a running app does not reach it. Until it does,
-every hook exits without doing anything.
-
-Pick **Local** for the session environment. Plugins do not load in the desktop
-app's WSL sessions, which is Anthropic's limitation rather than this plugin's.
+Kairos still requires Bash and `jq`; see [requirements](#requirements). Hooks
+bind when a session starts, so an already running session will not pick them up.
+On Windows, a checkout and dependencies inside WSL are separate from those in
+Windows. Use paths and dependencies belonging to the environment running the CLI.
 
 ## Commands
 
