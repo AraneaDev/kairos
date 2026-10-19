@@ -13,7 +13,7 @@
 [![Language](https://img.shields.io/github/languages/top/AraneaDev/kairos)](https://github.com/AraneaDev/kairos)
 [![Last commit](https://img.shields.io/github/last-commit/AraneaDev/kairos?label=last%20commit)](https://github.com/AraneaDev/kairos/commits/main)
 [![Conventional Commits](https://img.shields.io/badge/commits-conventional-fe5196?logo=conventionalcommits&logoColor=white)](https://www.conventionalcommits.org/)
-[![Status](https://img.shields.io/badge/status-pre--release-orange)](#load-from-source)
+[![Status](https://img.shields.io/badge/status-archived-lightgrey)](#load-from-source)
 
 </div>
 
@@ -139,8 +139,8 @@ total.
 
 ## Load from source
 
-Kairos is no longer listed on aranea-development.nl or distributed through the
-Aranea marketplace. Its source and releases remain available in this repository.
+Kairos is archived and is no longer distributed through the Aranea marketplace.
+Its source and releases remain available in this repository.
 Existing installations are not uninstalled by the catalogue change.
 
 To load a local checkout in a Claude Code terminal session:
@@ -343,4 +343,4 @@ MIT.
 ---
 
 Built by [Tim Schipper](https://tim-schipper.nl/en) and released as open source under
-[Aranea Development](https://aranea-development.nl).
+Aranea Development.
