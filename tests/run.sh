@@ -433,7 +433,7 @@ setup_env
 # clock-relative calculation, so the clock is frozen alongside them. Without
 # this they would all read as long expired, which is a real behaviour the
 # "an ended window reports nothing" assertion below covers on its own.
-# shellcheck disable=SC2317  # invoked indirectly, through the sourced libraries
+# shellcheck disable=SC2317,SC2329  # invoked indirectly, through the sourced libraries
 kairos_now() { printf '%s\n' "${KAIROS_FROZEN_NOW:-$(date +%s)}"; }
 KAIROS_FROZEN_NOW=1029000
 
@@ -554,7 +554,7 @@ is "a window that has already ended reports nothing" "0	0	0" "$(kairos_block "$a
 KAIROS_FROZEN_NOW=1029000
 
 unset KAIROS_FROZEN_NOW
-# shellcheck disable=SC2317  # invoked indirectly, through the sourced libraries
+# shellcheck disable=SC2317,SC2329  # invoked indirectly, through the sourced libraries
 kairos_now() { date +%s; }
 teardown_env
 
