@@ -343,4 +343,4 @@ MIT.
 ---
 
 Built by [Tim Schipper](https://tim-schipper.nl/en) and released as open source under
-Aranea Development.
+aranea.dev.
